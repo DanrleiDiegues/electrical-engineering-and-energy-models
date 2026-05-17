@@ -88,3 +88,90 @@ streamlit run streamlit_app.py
 
 For Streamlit Cloud, upload this folder and set the main file to
 `streamlit_app.py` or `app.py`.
+
+### Changing variables and equations in Streamlit
+
+The Streamlit app builds the solver input dynamically from the fields filled by
+the user.
+
+In the sidebar, write the variable names separated by commas:
+
+```text
+k, y, w, z
+```
+
+The order defines the internal vector `X`:
+
+```python
+X[0] = k
+X[1] = y
+X[2] = w
+X[3] = z
+```
+
+Then write `X0` in the same order:
+
+```text
+5, 6, 1, 1
+```
+
+This means:
+
+```text
+k = 5
+y = 6
+w = 1
+z = 1
+```
+
+The equations are written one per line in the `Equations` field. Each line can
+be an expression equal to zero:
+
+```python
+k * sin(2*w) + y * sin(w) - 2*z
+k * sin(w) - z
+k**2 * cos(2*w) + k*y*cos(w)
+2*k + y - 24
+```
+
+or in the natural `lhs = rhs` form:
+
+```python
+k * sin(w) = z
+2*k + y = 24
+```
+
+The app converts these internally to expressions equal to zero:
+
+```python
+k * sin(w) - z
+2*k + y - 24
+```
+
+When the user clicks `Run solver`, the app:
+
+1. reads the variable names;
+2. builds the initial vector `X0`;
+3. compiles the typed equations;
+4. creates the function `equa(x)`;
+5. calls `dmr_solver`;
+6. shows the solution, final residuals, final Jacobian, and convergence plots.
+
+Supported functions in equations include:
+
+```text
+sin, cos, tan, exp, log, log10, sqrt, abs, sinh, cosh, tanh
+```
+
+Supported constants:
+
+```text
+pi, e
+```
+
+Important notes:
+
+- `X0` must have the same number of values as the variable list.
+- Ideally, the number of equations should match the number of variables.
+- If the numbers are different, the solver still tries to compute the Newton
+  step with least squares, but the result may be less predictable.
