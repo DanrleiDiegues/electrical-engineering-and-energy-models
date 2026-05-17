@@ -1,0 +1,15 @@
+[project]
+name = "dmr-solver-python"
+version = "1.0.0"
+description = "Python implementation of the DMR-SOLVER Newton-Raphson interface."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.22",
+    "pandas>=2.0",
+    "streamlit>=1.30",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dmr_solver*"]
