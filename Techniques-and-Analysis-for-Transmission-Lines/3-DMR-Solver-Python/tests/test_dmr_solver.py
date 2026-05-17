@@ -55,6 +55,22 @@ class DmrSolverTest(unittest.TestCase):
         self.assertGreaterEqual(len(result.history), 1)
         self.assertEqual(result.history[-1].iteration, result.iter)
 
+    def test_solves_aula8_two_bus_power_flow_example(self):
+        def equa(x):
+            v2, t2 = x
+            p21 = 5.0 * v2**2 - v2 * (5.0 * np.cos(t2) + (-15.0) * np.sin(t2))
+            q21 = -((-15.0) + 0.0) * v2**2 + v2 * (
+                (-15.0) * np.cos(t2) - 5.0 * np.sin(t2)
+            )
+            return np.array([-1.0 - p21, -0.5 - q21])
+
+        result = dmr_solver(equa, [1.0, -0.05], 1e-6, return_result=True)
+
+        self.assertEqual(result.stat, 1)
+        np.testing.assert_allclose(
+            result.x, [0.94573237, -0.05289374], atol=1e-6
+        )
+
     def test_reports_non_convergence(self):
         x, iterations, stat, jac = dmr_solver(
             lambda x: np.array([x[0] ** 2 + 1.0]),

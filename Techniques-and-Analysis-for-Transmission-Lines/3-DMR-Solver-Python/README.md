@@ -89,6 +89,16 @@ streamlit run streamlit_app.py
 For Streamlit Cloud, upload this folder and set the main file to
 `streamlit_app.py` or `app.py`.
 
+The app includes two built-in examples in the sidebar:
+
+- `DMR-SOLVER original`;
+- `Aula 8 - fluxo de potencia 2 barras`.
+
+Select one of them and click `Carregar exemplo` to fill the variables, initial
+point, tolerance, and equations automatically. The Aula 8 example is also
+documented in `examples/aula8_streamlit_inputs.md` for copy/paste use.
+
+
 ### Changing variables and equations in Streamlit
 
 The Streamlit app builds the solver input dynamically from the fields filled by

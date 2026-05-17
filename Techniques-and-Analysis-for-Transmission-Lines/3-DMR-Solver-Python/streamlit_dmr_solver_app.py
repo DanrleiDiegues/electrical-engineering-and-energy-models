@@ -53,6 +53,33 @@ ALLOWED_NODE_TYPES = (
     ast.UAdd,
 )
 
+EXAMPLES = {
+    "DMR-SOLVER original": {
+        "variables": "k, y, w, z",
+        "x0": "5, 6, 1, 1",
+        "tol": "0.001",
+        "equations": "\n".join(
+            [
+                "k * sin(2*w) + y * sin(w) - 2*z",
+                "k * sin(w) - z",
+                "k**2 * cos(2*w) + k*y*cos(w)",
+                "2*k + y - 24",
+            ]
+        ),
+    },
+    "Aula 8 - fluxo de potencia 2 barras": {
+        "variables": "V2, t2",
+        "x0": "1.0, -0.05",
+        "tol": "0.000001",
+        "equations": "\n".join(
+            [
+                "-1.0 - (5.0*V2**2 - V2*(5.0*cos(t2) + (-15.0)*sin(t2)))",
+                "-0.5 - (-((-15.0) + 0.0)*V2**2 + V2*((-15.0)*cos(t2) - 5.0*sin(t2)))",
+            ]
+        ),
+    },
+}
+
 
 @dataclass(frozen=True)
 class CompiledEquation:
@@ -68,6 +95,11 @@ def main() -> None:
 
     with st.sidebar:
         st.header("Entradas")
+        example_name = st.selectbox("Exemplo", list(EXAMPLES))
+        if st.button("Carregar exemplo", use_container_width=True):
+            _set_example(example_name)
+            st.rerun()
+
         variables_text = st.text_input(
             "Variaveis",
             value=st.session_state["variables"],
@@ -92,10 +124,6 @@ def main() -> None:
             step=1,
         )
         damping = st.checkbox("Usar damping", value=True)
-
-        if st.button("Carregar exemplo oficial", use_container_width=True):
-            _set_example()
-            st.rerun()
 
     equations_text = st.text_area(
         "Equacoes",
@@ -140,21 +168,15 @@ def main() -> None:
 
 def _load_example_if_needed() -> None:
     if "variables" not in st.session_state:
-        _set_example()
+        _set_example("DMR-SOLVER original")
 
 
-def _set_example() -> None:
-    st.session_state["variables"] = "k, y, w, z"
-    st.session_state["x0"] = "5, 6, 1, 1"
-    st.session_state["tol"] = "0.001"
-    st.session_state["equations"] = "\n".join(
-        [
-            "k * sin(2*w) + y * sin(w) - 2*z",
-            "k * sin(w) - z",
-            "k**2 * cos(2*w) + k*y*cos(w)",
-            "2*k + y - 24",
-        ]
-    )
+def _set_example(example_name: str) -> None:
+    example = EXAMPLES[example_name]
+    st.session_state["variables"] = example["variables"]
+    st.session_state["x0"] = example["x0"]
+    st.session_state["tol"] = example["tol"]
+    st.session_state["equations"] = example["equations"]
 
 
 def _show_input_help() -> None:
