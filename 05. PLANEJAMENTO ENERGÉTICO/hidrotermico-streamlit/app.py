@@ -16,13 +16,23 @@ from model import UHES, Parameters, avaliar, planejamento, tabela_resultados
 st.set_page_config(page_title="Simulador - Planejamento Energético", page_icon="💧", layout="wide")
 st.markdown("""<style>
 .block-container{padding:4.5rem 2.5rem 3rem;max-width:1550px}
-h1{letter-spacing:-.04em!important} h2,h3{letter-spacing:-.02em!important}
+h1{letter-spacing:-.04em!important;font-size:clamp(1.65rem,3vw,2.75rem)!important;line-height:1.18!important} h2,h3{letter-spacing:-.02em!important}
 [data-testid="stMetric"]{background:#F0F6F7;padding:18px 20px;border-radius:12px;border:1px solid #DCE9EC}
 [data-testid="stMetricLabel"]{color:#526B76}
 [data-testid="stMetricValue"]{font-size:clamp(1.15rem,1.6vw,1.65rem)}
 [data-testid="stMetricLabel"] p{font-size:13px;white-space:normal}
 .eyebrow{color:#247B8B;letter-spacing:.16em;font-size:12px;font-weight:700}
 .intro{color:#5D7280;font-size:17px;margin-bottom:1.6rem}
+@media(max-width:1100px){
+[data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]){flex-wrap:wrap!important}
+[data-testid="stHorizontalBlock"]:has([data-testid="stMetric"])>[data-testid="stColumn"]{flex:1 1 calc(50% - .5rem)!important;width:calc(50% - .5rem)!important;min-width:0!important}
+[data-testid="stHorizontalBlock"]:has([data-testid="stBidiComponentRegular"]){flex-wrap:wrap!important}
+[data-testid="stHorizontalBlock"]:has([data-testid="stBidiComponentRegular"])>[data-testid="stColumn"]{flex:1 1 100%!important;width:100%!important;min-width:0!important}
+}
+@media(max-width:640px){
+[data-testid="stHorizontalBlock"]:has([data-testid="stMetric"])>[data-testid="stColumn"]{flex-basis:100%!important;width:100%!important}
+}
+
 </style>""", unsafe_allow_html=True)
 
 

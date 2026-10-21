@@ -25,9 +25,11 @@ def generation(p, trajectory):
               "yAxis": {"type": "value", "name": "MW médios", "min": 0, "max": max(p.carga*1.15, 1)},
               "series": [{"name": name, "type": "bar", "stack": "geracao", "barMaxWidth": 74,
                           "data": [float(r[i]) for r in rows],
-                          "label": {"show": True, "position": "inside", "color": "#fff",
+                          "label": {"show": p.n_meses <= 6, "position": "inside", "color": "#fff",
                                     "formatter": JsCode("p => p.value > 0.05 ? p.value.toLocaleString('pt-BR', {maximumFractionDigits: 1}) : ''")}}
                          for i, name in enumerate(names)]})
+    if p.n_meses > 6:
+        o["xAxis"]["axisLabel"] = {"formatter": JsCode("v => v.slice(0, 3) + (v.includes('ciclo') ? '/' + v.split(' ').pop() : '')")}
     o["series"].append({"name": "Carga", "type": "line", "symbol": "none", "data": [p.carga]*p.n_meses,
                         "lineStyle": {"color": "#344454", "type": "dashed", "width": 1.5}, "itemStyle": {"color": "#344454"}})
     return o
