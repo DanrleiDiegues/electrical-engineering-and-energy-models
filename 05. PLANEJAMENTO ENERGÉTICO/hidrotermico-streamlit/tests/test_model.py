@@ -18,7 +18,7 @@ def original(p):
     # Apenas parâmetros e funções do modelo; sem células de instalação ou gráficos.
     for index in (4, 6, 8, 10):
         exec(compile("".join(nb["cells"][index]["source"]), f"notebook_cell_{index}", "exec"), scope)
-    scope.update(CARGA=p.carga, NR_DISC=p.nr_disc, CENARIO_TRAJETORIA=list(p.trajetoria),
+    scope.update(MESES=list(p.meses), CARGA=p.carga, NR_DISC=p.nr_disc, CENARIO_TRAJETORIA=list(p.trajetoria),
                  AFL_MAX=np.array(p.afl_max), AFL_MIN=np.array(p.afl_min), CENARIOS=p.cenarios,
                  VMIN=np.array(p.vmin), VMAX=np.array(p.vmax), VI_INICIAL=p.vi,
                  ro=p.ro, ENGOL=np.array(p.engolimento)*FATOR_VOLUME,
@@ -31,7 +31,7 @@ def test_default_parameters_match_original_cell():
     nb = json.loads((Path(__file__).resolve().parents[1]/"reference"/"original.ipynb").read_text(encoding="utf-8"))
     scope = {"np": np}
     exec("".join(nb["cells"][4]["source"]), scope)
-    p = Parameters()
+    p = Parameters(n_meses=3)
     for actual, name in ((p.carga, "CARGA"), (p.nr_disc, "NR_DISC"), (p.vmin, "VMIN"),
                          (p.vmax, "VMAX"), (p.vi, "VI_INICIAL"), (p.ro, "ro"),
                          (np.array(p.engolimento)*FATOR_VOLUME, "ENGOL"), (p.afl_max, "AFL_MAX"),
@@ -43,10 +43,12 @@ def test_default_parameters_match_original_cell():
 
 
 @pytest.mark.parametrize("p", [
-    replace(Parameters(), nr_disc=4),
-    replace(Parameters(), nr_disc=4, carga=190, inicial=(25, 70), trajetoria=(0, 1, 0),
+    replace(Parameters(n_meses=3), nr_disc=4),
+    replace(Parameters(n_meses=3), nr_disc=4, carga=190, inicial=(25, 70), trajetoria=(0, 1, 0),
             afl_max=((45, 80), (50, 110), (60, 190)), gtmax=(12, 20), custo_termico=(900, 150)),
-    replace(Parameters(), nr_disc=3, carga=0),
+    replace(Parameters(n_meses=3), nr_disc=3, carga=0),
+    Parameters(n_meses=12, nr_disc=3),
+    Parameters(n_meses=1, nr_disc=3),
 ])
 def test_equivalence_to_notebook(p):
     compare_notebook(p)
@@ -69,11 +71,11 @@ def compare_notebook(p):
 
 @pytest.mark.full
 def test_original_24_level_grid():
-    compare_notebook(Parameters())
+    compare_notebook(Parameters(n_meses=3))
 
 
 def test_all_eight_trajectories_obey_physical_constraints():
-    base = replace(Parameters(), nr_disc=4)
+    base = replace(Parameters(n_meses=3), nr_disc=4)
     _, states, curves = planejamento(base)
     for trajectory in product((0, 1), repeat=3):
         p = replace(base, trajetoria=trajectory)
@@ -97,7 +99,7 @@ def test_all_eight_trajectories_obey_physical_constraints():
 
 
 def test_editable_nominal_capacity_and_no_generation():
-    p = replace(Parameters(), nr_disc=2, potencia_serra=1)
+    p = replace(Parameters(n_meses=3), nr_disc=2, potencia_serra=1)
     r = despacho_hidrotermico(p, p.vi, p.cenarios[0][0])
     assert p.ro[1]*r["vt"][1] <= 1+1e-7
     p = replace(p, engolimento=(0, 0), gtmax=(0, 0))
@@ -113,11 +115,50 @@ def test_editable_nominal_capacity_and_no_generation():
 ])
 def test_invalid_inputs(change):
     with pytest.raises(ValueError):
-        replace(Parameters(), **change).validate()
+        replace(Parameters(n_meses=3), **change).validate()
 
 
 def test_parameters_roundtrip_and_policy_key():
-    p = Parameters.from_dict(json.loads(json.dumps(Parameters().to_dict())))
-    assert p == Parameters()
+    p = Parameters.from_dict(json.loads(json.dumps(Parameters(n_meses=3).to_dict())))
+    assert p == Parameters(n_meses=3)
     assert replace(p, inicial=(0, 100), trajetoria=(0, 0, 0)).policy_parameters() == p.policy_parameters()
     assert replace(p, carga=100).policy_parameters() != p.policy_parameters()
+
+
+@pytest.mark.parametrize("n", [1, 2, 12, 18, 24])
+def test_variable_horizon_and_terminal_cost(n):
+    p = Parameters(n_meses=n, nr_disc=3)
+    _, states, curves = planejamento(p)
+    result = avaliar(p, states, curves)
+    assert len(curves) == n+1 and curves[-1] is None
+    assert len(p.meses) == len(set(p.meses)) == n
+    for name in ("planejada", "isolada"):
+        assert len(result[name]) == n
+        assert result[name][-1]["alpha"] == pytest.approx(0)
+        for row in result[name]:
+            assert np.dot(p.ro, row["vt"])+row["gt1"]+row["gt2"]+row["def"] == pytest.approx(p.carga, abs=1e-6)
+
+
+def test_twelve_month_defaults_and_explicit_resize():
+    p = Parameters()
+    p.validate()
+    assert p.n_meses == len(p.afl_max) == len(p.afl_min) == len(p.trajetoria) == 12
+    assert p.afl_max[3:] == (p.afl_max[2],)*9
+    changed = replace(p, afl_max=p.afl_max[:5] + ((80, 200),) + p.afl_max[6:])
+    longer = changed.with_horizon(18)
+    assert longer.afl_max[:12] == changed.afl_max
+    assert longer.afl_max[12:] == (changed.afl_max[-1],)*6
+    assert longer.with_horizon(1).afl_max == changed.afl_max[:1]
+    longer.validate()
+
+
+@pytest.mark.parametrize("n", [0, -1, 1.5, True])
+def test_invalid_horizon(n):
+    with pytest.raises(ValueError):
+        Parameters(n_meses=n)
+
+
+def test_legacy_json_infers_horizon():
+    data = Parameters(n_meses=3).to_dict()
+    del data["n_meses"]
+    assert Parameters.from_dict(data) == Parameters(n_meses=3)

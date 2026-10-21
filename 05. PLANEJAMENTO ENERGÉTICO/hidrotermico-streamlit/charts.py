@@ -1,7 +1,6 @@
 """Opções Apache ECharts; gráficos não participam da interpolação do solver."""
 import numpy as np
 from streamlit_echarts import JsCode
-from model import MESES, UHES
 
 COLORS = ["#176B87", "#49B3B1", "#D69B35", "#8B6A53", "#CB5360"]
 
@@ -22,21 +21,21 @@ def generation(p, trajectory):
     o = base()
     names = ["Batalha", "Serra do Facão", "BBF Baliza", "ERB Candeias", "Déficit"]
     rows = [[p.ro[0]*r["vt"][0], p.ro[1]*r["vt"][1], r["gt1"], r["gt2"], max(0, r["def"])] for r in trajectory]
-    o.update({"xAxis": {"type": "category", "data": list(MESES)},
+    o.update({"xAxis": {"type": "category", "data": list(p.meses)},
               "yAxis": {"type": "value", "name": "MW médios", "min": 0, "max": max(p.carga*1.15, 1)},
               "series": [{"name": name, "type": "bar", "stack": "geracao", "barMaxWidth": 74,
                           "data": [float(r[i]) for r in rows],
                           "label": {"show": True, "position": "inside", "color": "#fff",
                                     "formatter": JsCode("p => p.value > 0.05 ? p.value.toLocaleString('pt-BR', {maximumFractionDigits: 1}) : ''")}}
                          for i, name in enumerate(names)]})
-    o["series"].append({"name": "Carga", "type": "line", "symbol": "none", "data": [p.carga]*3,
+    o["series"].append({"name": "Carga", "type": "line", "symbol": "none", "data": [p.carga]*p.n_meses,
                         "lineStyle": {"color": "#344454", "type": "dashed", "width": 1.5}, "itemStyle": {"color": "#344454"}})
     return o
 
 
 def storage(p, planned, isolated, i):
     o = base()
-    o.update({"xAxis": {"type": "category", "data": ["Inicial", *MESES], "boundaryGap": False},
+    o.update({"xAxis": {"type": "category", "data": ["Inicial", *p.meses], "boundaryGap": False},
               "yAxis": {"type": "value", "name": "Volume útil (%)", "min": 0, "max": 100}, "series": []})
     for traj, name, style in ((planned, "Com custo futuro", "solid"), (isolated, "Isolados", "dashed")):
         v = np.array([p.vi[i]] + [r["vf"][i] for r in traj])
@@ -46,9 +45,9 @@ def storage(p, planned, isolated, i):
     return o
 
 
-def costs(planned, isolated):
+def costs(p, planned, isolated):
     o = base()
-    o.update({"xAxis": {"type": "category", "data": list(MESES)},
+    o.update({"xAxis": {"type": "category", "data": list(p.meses)},
               "yAxis": {"type": "value", "name": "Custo imediato (R$ milhões)"},
               "series": [{"name": name, "type": "bar", "barMaxWidth": 60,
                           "data": [r["ci"]/1e6 for r in traj]}

@@ -1,4 +1,4 @@
-"""Aplicativo Streamlit para o planejamento hidrotérmico de três estágios."""
+"""Aplicativo Streamlit para o planejamento hidrotérmico com horizonte ajustável."""
 import io
 import json
 import time
@@ -11,9 +11,9 @@ import streamlit as st
 from streamlit_echarts import st_echarts
 
 import charts
-from model import MESES, UHES, Parameters, avaliar, planejamento, tabela_resultados
+from model import UHES, Parameters, avaliar, planejamento, tabela_resultados
 
-st.set_page_config(page_title="Planejamento hidrotérmico", page_icon="💧", layout="wide")
+st.set_page_config(page_title="Simulador - Planejamento Energético", page_icon="💧", layout="wide")
 st.markdown("""<style>
 .block-container{padding:4.5rem 2.5rem 3rem;max-width:1550px}
 h1{letter-spacing:-.04em!important} h2,h3{letter-spacing:-.02em!important}
@@ -52,38 +52,56 @@ def num(label, value, key, minimum=0.0, maximum=None, step=1.0, fmt=None, help=N
     return st.number_input(label, **kwargs)
 
 
-defaults = Parameters()
 with st.sidebar:
     st.markdown("### Controle da simulação")
-    st.caption("3 estágios · 2 UHEs em cascata · 2 UTEs")
+    n_meses = int(st.number_input("Número de meses", min_value=1, max_value=60, value=12, step=1, key="input_n_meses",
+                                 help="Horizonte padrão de 12 meses. Cada estágio mantém os 30 dias do notebook."))
+    defaults = Parameters(n_meses=n_meses)
+    st.caption(f"{n_meses} estágios · 2 UHEs em cascata · 2 UTEs")
     carga = num("Carga constante (MW médios)", defaults.carga, "carga", step=10.0)
     nr_disc = st.number_input("Níveis de volume por UHE", min_value=2, max_value=40, value=24, step=1, key="input_nr_disc",
-                              help="O notebook usa 24 níveis: 576 pares e 3.456 despachos no planejamento. O limite de 40 é apenas da interface.")
-    st.caption(f"{nr_disc**2:,} pares de volumes · {6*nr_disc**2:,} otimizações na grade".replace(",", "."))
+                              help="O notebook usa 24 níveis: 576 pares. O número de despachos depende do horizonte. O limite de 40 é apenas da interface.")
+    st.caption(f"{nr_disc**2:,} pares de volumes · {2*n_meses*nr_disc**2:,} otimizações na grade".replace(",", "."))
     if nr_disc > 24:
         st.info("Grades maiores exigem mais tempo de cálculo. Cada despacho também terá mais pesos de interpolação.")
     st.markdown("#### Armazenamento inicial")
     inicial = tuple(num(f"{u} (% útil)", defaults.inicial[i], f"inicial_{i}", maximum=100, step=1) for i, u in enumerate(UHES))
     st.markdown("#### Trajetória realizada")
     st.caption("Cada seleção vale conjuntamente para as duas UHEs.")
-    trajetoria = tuple(st.selectbox(m, options=[0, 1], index=1, format_func=lambda s: "Máximo" if s == 0 else "Mínimo", key=f"input_traj_{i}") for i, m in enumerate(MESES))
+    saved_traj = list(st.session_state.get("input_trajectory_values", []))
+    saved_traj += [1] * max(0, n_meses-len(saved_traj))
+    with st.expander("Trajetória mês a mês", key="input_trajectory_panel", on_change="rerun"):
+        trajetoria = tuple(st.selectbox(m, options=[0, 1], index=saved_traj[i], format_func=lambda s: "Máximo" if s == 0 else "Mínimo", key=f"input_traj_{i}") for i, m in enumerate(defaults.meses))
+    saved_traj[:n_meses] = trajetoria
+    st.session_state.input_trajectory_values = saved_traj
     automatic = st.toggle("Recalcular automaticamente", value=True, key="input_auto")
     calculate = st.button("Recalcular agora", type="primary", width="stretch")
-    st.button("Restaurar valores do notebook", on_click=reset, width="stretch")
+    st.button("Restaurar cenário padrão", on_click=reset, width="stretch")
     st.caption("Os valores são aplicados ao confirmar a edição de um campo. Sem recálculo automático, use o botão acima.")
 
 st.markdown('<div class="eyebrow">LABORATÓRIO DE PLANEJAMENTO ENERGÉTICO</div>', unsafe_allow_html=True)
-st.title("Água hoje. Energia amanhã.")
+st.title("Simulador - Planejamento Energético")
 st.markdown('<div class="intro">Planejamento hidrotérmico · Batalha → Serra do Facão<br>Explore o efeito das entradas sobre a geração, o armazenamento e o custo de operação.</div>', unsafe_allow_html=True)
 
 with st.expander("Editar afluências e parâmetros das usinas", expanded=False, key="input_details", on_change="rerun"):
     st.markdown("#### Afluências locais (m³/s)")
     st.caption("Máximo e mínimo formam dois cenários conjuntos equiprováveis. A afluência de Serra aqui é apenas a contribuição local.")
-    afl = pd.DataFrame({"Mês": MESES, "Batalha · máximo": np.array(defaults.afl_max)[:, 0],
-                        "Batalha · mínimo": np.array(defaults.afl_min)[:, 0],
-                        "Serra · máximo": np.array(defaults.afl_max)[:, 1], "Serra · mínimo": np.array(defaults.afl_min)[:, 1]})
-    afl = st.data_editor(afl, hide_index=True, disabled=["Mês"], key="input_afl", width="stretch",
+    if n_meses > 3:
+        st.info("Setembro a novembro usam as afluências do notebook. Os meses adicionais iniciam com os valores de novembro, como exemplo editável; não são dados históricos desses meses.")
+    saved_afl = [list(row) for row in st.session_state.get("input_inflow_values", [])]
+    if not saved_afl:
+        saved_afl = [[a[0], b[0], a[1], b[1]] for a, b in zip(defaults.afl_max, defaults.afl_min)]
+    while len(saved_afl) < n_meses:
+        saved_afl.append(saved_afl[-1].copy())
+    afl = pd.DataFrame(saved_afl[:n_meses], columns=["Batalha · máximo", "Batalha · mínimo", "Serra · máximo", "Serra · mínimo"])
+    afl.insert(0, "Mês", defaults.meses)
+    if st.session_state.get("input_inflow_horizon") != n_meses:
+        st.session_state.input_inflow_seed = afl.copy()
+        st.session_state.input_inflow_horizon = n_meses
+    afl = st.data_editor(st.session_state.input_inflow_seed, hide_index=True, disabled=["Mês"], key=f"input_afl_{n_meses}", width="stretch",
                          column_config={c: st.column_config.NumberColumn(c, min_value=0.0, format="%.2f", required=True) for c in afl.columns if c != "Mês"})
+    saved_afl[:n_meses] = afl.iloc[:, 1:].to_numpy().tolist()
+    st.session_state.input_inflow_values = saved_afl
     st.markdown("#### Hidrelétricas")
     hyd = pd.DataFrame({"Usina": UHES, "Volume mínimo (hm³)": defaults.vmin, "Volume máximo (hm³)": defaults.vmax,
                         "Engolimento (m³/s)": defaults.engolimento, "Produtibilidade (MW/(m³/s))": defaults.produtividade})
@@ -158,14 +176,14 @@ with overview:
             st.markdown(f"**{UHES[i]}**")
             st_echarts(charts.storage(p, planned, isolated, i), height="340px", key=f"storage_{i}")
     st.subheader("Custo imediato por mês")
-    st_echarts(charts.costs(planned, isolated), height="340px", key="costs")
+    st_echarts(charts.costs(p, planned, isolated), height="340px", key="costs")
     if any(x["def"] > 1e-5 for x in planned):
         st.warning("Há déficit na trajetória planejada. Consulte os valores mensais na tabela de resultados.")
 with future:
     st.subheader("Custo esperado por par de volumes iniciais")
-    st.caption("Cada ponto representa o custo desde o mês indicado até novembro. A grade é usada pelo otimizador; a visualização não modifica sua interpolação convexa.")
+    st.caption("Cada ponto representa o custo desde o mês indicado até o fim do horizonte selecionado. A grade é usada pelo otimizador; a visualização não modifica sua interpolação convexa.")
     st.caption("Cores e altura da superfície: custo em R$ milhões. Eixos horizontais: volume útil inicial de cada UHE (%).")
-    month = st.selectbox("Custo desde", range(3), format_func=lambda i: MESES[i], key="view_month")
+    month = st.selectbox("Custo desde", range(p.n_meses), format_func=lambda i: p.meses[i], key=f"view_month_{p.n_meses}")
     mode = st.radio("Visualização", ["Mapa de calor", "Superfície 3D"], horizontal=True, key="view_surface")
     st_echarts(charts.future_cost(p, r["curvas"][month], surface=mode == "Superfície 3D"), height="560px", key="future")
     if mode == "Superfície 3D":
@@ -181,7 +199,7 @@ with tables:
     st.markdown("**Custos no volume inicial real**")
     st.dataframe(initial_df, hide_index=True, width="stretch")
     curve_df = pd.DataFrame(r["estados"], columns=["VI Batalha (hm³)", "VI Serra (hm³)"])
-    for i, month_name in enumerate(MESES):
+    for i, month_name in enumerate(p.meses):
         curve_df[f"Custo desde {month_name} (R$)"] = r["curvas"][i]
     params_json = json.dumps(p.to_dict(), ensure_ascii=False, indent=2, allow_nan=False)
     buf = io.BytesIO()
@@ -196,13 +214,13 @@ with tables:
 with methodology:
     st.subheader("A formulação do notebook, preservada")
     st.markdown("""
-O planejamento percorre **novembro → outubro → setembro**. Para cada par de volumes iniciais, resolve os cenários máximo e mínimo e guarda a média dos dois custos ótimos. A simulação percorre os meses na ordem cronológica usando a política calculada.
+O planejamento percorre o horizonte do último mês para o primeiro. Para cada par de volumes iniciais, resolve os cenários máximo e mínimo e guarda a média dos dois custos ótimos. A simulação percorre os meses na ordem cronológica usando a política calculada.
 
 - **Cascata:** Serra recebe sua afluência local, o turbinamento e o vertimento de Batalha no mesmo mês.
 - **Cenários:** ambas as UHEs no máximo ou ambas no mínimo, com 50% cada e independência entre meses.
 - **Custo futuro:** combinação convexa de todos os pares da grade, com pesos escolhidos pelo solver. Esses pesos não são probabilidades de afluência nem interpolação bilinear.
 - **Despacho:** minimiza custo térmico, custo do déficit, R$ 0,01 por hm³ vertido e custo futuro. Solver SCIP via PySCIPOpt, tolerância dual de 1e-9, custos internos em R$ milhões.
-- **Hipóteses:** três meses de 30 dias, produtividade constante, sem evaporação, sem vazão mínima obrigatória e custo futuro terminal zero.
+- **Hipóteses:** estágios mensais de 30 dias, produtividade constante, sem evaporação, sem vazão mínima obrigatória e custo futuro terminal zero.
 - **Limites:** volumes mínimo/máximo, engolimentos, capacidades térmicas e limite nominal de Serra. Batalha mantém somente o limite de engolimento, como no notebook.
 
 O custo esperado inicial considera os dois cenários; o custo realizado depende da trajetória escolhida. Políticas ótimas em expectativa podem não ser as mais baratas para toda trajetória individual. Soluções hidráulicas equivalentes podem variar entre versões do solver.
@@ -213,4 +231,4 @@ O custo esperado inicial considera os dois cenários; o custo realizado depende 
     st.caption("Fonte: planejamento_hidrotermico_3_estágios_2_UHE.ipynb. O notebook original está preservado em reference/original.ipynb.")
 
 st.divider()
-st.caption("Planejamento hidrotérmico · Apache ECharts · SCIP / PySCIPOpt · Valores padrão do notebook original")
+st.caption("Planejamento hidrotérmico · Apache ECharts · SCIP / PySCIPOpt · Horizonte ajustável · Modelo baseado no notebook original")

@@ -8,6 +8,10 @@ import pandas as pd
 from pyscipopt import Model, quicksum
 
 MESES = ("Setembro", "Outubro", "Novembro")
+CALENDARIO = ("Setembro", "Outubro", "Novembro", "Dezembro", "Janeiro", "Fevereiro",
+              "Março", "Abril", "Maio", "Junho", "Julho", "Agosto")
+AFL_MAX_ORIGINAL = ((30.0, 70.0), (35.0, 93.0), (40.0, 176.0))
+AFL_MIN_ORIGINAL = ((20.0, 24.0), (25.0, 29.0), (30.0, 20.0))
 UHES = ("Batalha", "Serra do Facão")
 HORAS = 30 * 24
 FATOR_VOLUME = HORAS * 3600 / 1_000_000
@@ -16,6 +20,7 @@ ESCALA_CUSTO = 1_000_000
 
 @dataclass(frozen=True)
 class Parameters:
+    n_meses: int = 12
     carga: float = 250.0
     nr_disc: int = 24
     vmin: tuple = (430.049988, 1752.0)
@@ -27,9 +32,33 @@ class Parameters:
     gtmax: tuple = (10.0, 17.0)
     custo_termico: tuple = (882.76, 118.93)  # R$/MWh
     custo_deficit: float = 4000.0
-    afl_max: tuple = ((30.0, 70.0), (35.0, 93.0), (40.0, 176.0))
-    afl_min: tuple = ((20.0, 24.0), (25.0, 29.0), (30.0, 20.0))
-    trajetoria: tuple = (1, 1, 1)
+    afl_max: tuple | None = None
+    afl_min: tuple | None = None
+    trajetoria: tuple | None = None
+
+    def __post_init__(self):
+        if type(self.n_meses) is not int or self.n_meses < 1:
+            raise ValueError("O horizonte deve ser um inteiro maior ou igual a 1 mês.")
+        for name, original in (("afl_max", AFL_MAX_ORIGINAL), ("afl_min", AFL_MIN_ORIGINAL)):
+            if getattr(self, name) is None:
+                values = original[:self.n_meses] + (original[-1],) * max(0, self.n_meses-len(original))
+                object.__setattr__(self, name, values)
+        if self.trajetoria is None:
+            object.__setattr__(self, "trajetoria", (1,) * self.n_meses)
+
+    @property
+    def meses(self):
+        return tuple(CALENDARIO[i % 12] if self.n_meses <= 12 else
+                     f"{CALENDARIO[i % 12]} · ciclo {i // 12 + 1}" for i in range(self.n_meses))
+
+    def with_horizon(self, n_meses):
+        """Preserva meses existentes e preenche novos com a última afluência."""
+        if type(n_meses) is not int or n_meses < 1:
+            raise ValueError("O horizonte deve ser um inteiro maior ou igual a 1 mês.")
+        def resize(values):
+            return values[:n_meses] + (values[-1],) * max(0, n_meses-len(values))
+        return replace(self, n_meses=n_meses, afl_max=resize(self.afl_max),
+                       afl_min=resize(self.afl_min), trajetoria=resize(self.trajetoria))
 
     @property
     def vi(self):
@@ -45,7 +74,7 @@ class Parameters:
 
     def policy_parameters(self):
         """Volume inicial e trajetória não alteram a recursão na grade."""
-        return replace(self, inicial=Parameters().inicial, trajetoria=Parameters().trajetoria)
+        return replace(self, inicial=(39.7, 50.2), trajetoria=(1,) * self.n_meses)
 
     def validate(self):
         if type(self.nr_disc) is not int or self.nr_disc < 2:
@@ -66,11 +95,11 @@ class Parameters:
             if np.any(np.array(getattr(self, field)) < 0):
                 raise ValueError(f"{field}: valores negativos não são permitidos.")
         hi, lo = np.array(self.afl_max, dtype=float), np.array(self.afl_min, dtype=float)
-        if hi.shape != (3, 2) or lo.shape != (3, 2) or not np.all(np.isfinite([hi, lo])):
-            raise ValueError("Informe afluências finitas para os três meses e as duas UHEs.")
+        if hi.shape != (self.n_meses, 2) or lo.shape != (self.n_meses, 2) or not np.all(np.isfinite([hi, lo])):
+            raise ValueError(f"Informe afluências finitas para os {self.n_meses} meses e as duas UHEs.")
         if np.any(lo < 0) or np.any(hi < lo):
             raise ValueError("As afluências devem respeitar 0 ≤ mínima ≤ máxima.")
-        if len(self.trajetoria) != 3 or any(type(s) is not int or s not in (0, 1) for s in self.trajetoria):
+        if len(self.trajetoria) != self.n_meses or any(type(s) is not int or s not in (0, 1) for s in self.trajetoria):
             raise ValueError("Escolha máximo (0) ou mínimo (1) em cada mês da trajetória.")
 
     def to_dict(self):
@@ -80,6 +109,9 @@ class Parameters:
     def from_dict(cls, data):
         if not isinstance(data, dict):
             raise ValueError("O cenário JSON deve ser um objeto.")
+        data = dict(data)
+        if "n_meses" not in data and isinstance(data.get("afl_max"), (list, tuple)):
+            data["n_meses"] = len(data["afl_max"])
         unknown = set(data) - set(cls.__dataclass_fields__)
         if unknown:
             raise ValueError("Parâmetros desconhecidos: " + ", ".join(sorted(unknown)))
@@ -140,9 +172,9 @@ def planejamento(p: Parameters, progress: Callable | None = None):
     p.validate()
     grades = [np.linspace(p.vmin[i], p.vmax[i], p.nr_disc) for i in range(2)]
     estados = np.array(list(product(*grades)))
-    curvas = [None] * (len(MESES) + 1)
-    done, total = 0, 3 * len(estados) * 2
-    for t in range(len(MESES)-1, -1, -1):
+    curvas = [None] * (p.n_meses + 1)
+    done, total = 0, p.n_meses * len(estados) * 2
+    for t in range(p.n_meses-1, -1, -1):
         custos = []
         for VI in estados:
             resultados = []
@@ -152,14 +184,14 @@ def planejamento(p: Parameters, progress: Callable | None = None):
                 done += 1
             custos.append(sum(resultados) / 2)
             if progress and (done % 40 == 0 or done == total):
-                progress(done, total, MESES[t])
+                progress(done, total, p.meses[t])
         curvas[t] = np.array(custos)
     return grades, estados, curvas
 
 
 def simular(p, estados, curvas, considerar_futuro=True):
     VI, trajetoria = p.vi.copy(), []
-    for t, mes in enumerate(MESES):
+    for t, mes in enumerate(p.meses):
         AFL = p.cenarios[p.trajetoria[t]][t]
         futuro = curvas[t+1] if considerar_futuro else None
         r = despacho_hidrotermico(p, VI, AFL, estados, futuro)

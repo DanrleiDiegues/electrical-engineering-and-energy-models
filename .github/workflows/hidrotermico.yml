@@ -6,11 +6,15 @@ on:
       - '05. PLANEJAMENTO ENERGÉTICO/hidrotermico-streamlit/**'
       - '.github/workflows/hidrotermico.yml'
       - '.streamlit/config.toml'
+      - 'requirements.txt'
+      - 'streamlit_app.py'
   pull_request:
     paths:
       - '05. PLANEJAMENTO ENERGÉTICO/hidrotermico-streamlit/**'
       - '.github/workflows/hidrotermico.yml'
       - '.streamlit/config.toml'
+      - 'requirements.txt'
+      - 'streamlit_app.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,6 +30,8 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: '05. PLANEJAMENTO ENERGÉTICO/hidrotermico-streamlit/requirements*.txt'
+          cache-dependency-path: |
+            requirements.txt
+            05. PLANEJAMENTO ENERGÉTICO/hidrotermico-streamlit/requirements-dev.txt
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pytest -q
