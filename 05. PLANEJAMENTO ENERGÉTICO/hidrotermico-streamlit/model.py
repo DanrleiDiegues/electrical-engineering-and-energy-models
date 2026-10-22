@@ -7,9 +7,8 @@ import numpy as np
 import pandas as pd
 from pyscipopt import Model, quicksum
 
-MESES = ("Setembro", "Outubro", "Novembro")
-CALENDARIO = ("Setembro", "Outubro", "Novembro", "Dezembro", "Janeiro", "Fevereiro",
-              "Março", "Abril", "Maio", "Junho", "Julho", "Agosto")
+CALENDARIO = ("Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+              "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro")
 AFL_MAX_ORIGINAL = ((30.0, 70.0), (35.0, 93.0), (40.0, 176.0))
 AFL_MIN_ORIGINAL = ((20.0, 24.0), (25.0, 29.0), (30.0, 20.0))
 UHES = ("Batalha", "Serra do Facão")
@@ -22,6 +21,7 @@ ESCALA_CUSTO = 1_000_000
 class Parameters:
     n_meses: int = 12
     carga: float = 250.0
+    cargas_mensais: tuple | None = None
     nr_disc: int = 24
     vmin: tuple = (430.049988, 1752.0)
     vmax: tuple = (1781.609985, 5199.0)
@@ -39,12 +39,16 @@ class Parameters:
     def __post_init__(self):
         if type(self.n_meses) is not int or self.n_meses < 1:
             raise ValueError("O horizonte deve ser um inteiro maior ou igual a 1 mês.")
-        for name, original in (("afl_max", AFL_MAX_ORIGINAL), ("afl_min", AFL_MIN_ORIGINAL)):
+        for name, pair in (("afl_max", (220.0, 350.0)), ("afl_min", (30.0, 20.0))):
             if getattr(self, name) is None:
-                values = original[:self.n_meses] + (original[-1],) * max(0, self.n_meses-len(original))
+                values = (pair,) * self.n_meses
                 object.__setattr__(self, name, values)
         if self.trajetoria is None:
-            object.__setattr__(self, "trajetoria", (1,) * self.n_meses)
+            object.__setattr__(self, "trajetoria", (0,) * self.n_meses)
+
+    @property
+    def cargas(self):
+        return np.full(self.n_meses, self.carga, dtype=float) if self.cargas_mensais is None else np.asarray(self.cargas_mensais, dtype=float)
 
     @property
     def meses(self):
@@ -58,7 +62,8 @@ class Parameters:
         def resize(values):
             return values[:n_meses] + (values[-1],) * max(0, n_meses-len(values))
         return replace(self, n_meses=n_meses, afl_max=resize(self.afl_max),
-                       afl_min=resize(self.afl_min), trajetoria=resize(self.trajetoria))
+                       afl_min=resize(self.afl_min), trajetoria=resize(self.trajetoria),
+                       cargas_mensais=None if self.cargas_mensais is None else resize(self.cargas_mensais))
 
     @property
     def vi(self):
@@ -74,7 +79,8 @@ class Parameters:
 
     def policy_parameters(self):
         """Volume inicial e trajetória não alteram a recursão na grade."""
-        return replace(self, inicial=(39.7, 50.2), trajetoria=(1,) * self.n_meses)
+        return replace(self, inicial=(39.7, 50.2), trajetoria=(0,) * self.n_meses,
+                       carga=self.carga if self.cargas_mensais is None else 0.0)
 
     def validate(self):
         if type(self.nr_disc) is not int or self.nr_disc < 2:
@@ -87,6 +93,8 @@ class Parameters:
             value = getattr(self, field)
             if not np.isfinite(value) or value < 0:
                 raise ValueError(f"{field}: informe um número finito não negativo.")
+        if self.cargas.shape != (self.n_meses,) or not np.all(np.isfinite(self.cargas)) or np.any(self.cargas < 0):
+            raise ValueError(f"Informe uma carga finita e não negativa para cada um dos {self.n_meses} meses.")
         if np.any(np.array(self.vmax) <= self.vmin) or np.any(np.array(self.vmin) < 0):
             raise ValueError("Os volumes devem respeitar 0 ≤ mínimo < máximo em cada UHE.")
         if np.any(np.array(self.inicial) < 0) or np.any(np.array(self.inicial) > 100):
@@ -125,8 +133,9 @@ class Parameters:
         return p
 
 
-def despacho_hidrotermico(p, VI, AFL, estados=None, custos_futuros=None):
+def despacho_hidrotermico(p, VI, AFL, estados=None, custos_futuros=None, carga=None):
     """Mesmas variáveis, restrições, pesos e objetivo da célula 6 do notebook."""
+    demanda = p.carga if carga is None else float(carga)
     modelo = Model("despacho_hidrotermico")
     modelo.hideOutput()
     modelo.setRealParam("numerics/dualfeastol", 1e-9)
@@ -141,7 +150,7 @@ def despacho_hidrotermico(p, VI, AFL, estados=None, custos_futuros=None):
 
         modelo.addCons(vf[0] == float(VI[0] + AFL[0]) - vt[0] - vv[0])
         modelo.addCons(vf[1] == float(VI[1] + AFL[1]) + vt[0] + vv[0] - vt[1] - vv[1])
-        modelo.addCons(float(p.ro[0])*vt[0] + float(p.ro[1])*vt[1] + gt1 + gt2 + deficit == p.carga)
+        modelo.addCons(float(p.ro[0])*vt[0] + float(p.ro[1])*vt[1] + gt1 + gt2 + deficit == demanda)
         modelo.addCons(float(p.ro[1])*vt[1] <= p.potencia_serra)
 
         if custos_futuros is None:
@@ -173,13 +182,14 @@ def planejamento(p: Parameters, progress: Callable | None = None):
     grades = [np.linspace(p.vmin[i], p.vmax[i], p.nr_disc) for i in range(2)]
     estados = np.array(list(product(*grades)))
     curvas = [None] * (p.n_meses + 1)
+    cargas = p.cargas
     done, total = 0, p.n_meses * len(estados) * 2
     for t in range(p.n_meses-1, -1, -1):
         custos = []
         for VI in estados:
             resultados = []
             for cenario in p.cenarios:
-                r = despacho_hidrotermico(p, VI, cenario[t], estados, curvas[t+1])
+                r = despacho_hidrotermico(p, VI, cenario[t], estados, curvas[t+1], carga=cargas[t])
                 resultados.append(r["fob"])
                 done += 1
             custos.append(sum(resultados) / 2)
@@ -194,8 +204,8 @@ def simular(p, estados, curvas, considerar_futuro=True):
     for t, mes in enumerate(p.meses):
         AFL = p.cenarios[p.trajetoria[t]][t]
         futuro = curvas[t+1] if considerar_futuro else None
-        r = despacho_hidrotermico(p, VI, AFL, estados, futuro)
-        trajetoria.append({"mes": mes, "VI": VI.copy(), "AFL": AFL.copy(), **r})
+        r = despacho_hidrotermico(p, VI, AFL, estados, futuro, carga=p.cargas[t])
+        trajetoria.append({"mes": mes, "carga": float(p.cargas[t]), "VI": VI.copy(), "AFL": AFL.copy(), **r})
         VI = r["vf"].copy()
     return trajetoria
 
@@ -204,13 +214,13 @@ def avaliar(p, estados, curvas):
     p.validate()
     planejada = simular(p, estados, curvas)
     isolada = simular(p, estados, curvas, considerar_futuro=False)
-    iniciais = [despacho_hidrotermico(p, p.vi, c[0], estados, curvas[1])["fob"] for c in p.cenarios]
+    iniciais = [despacho_hidrotermico(p, p.vi, c[0], estados, curvas[1], carga=p.cargas[0])["fob"] for c in p.cenarios]
     return {"planejada": planejada, "isolada": isolada, "custos_iniciais": iniciais}
 
 
 def tabela_resultados(p, trajetoria):
     return pd.DataFrame([{
-        "Mês": r["mes"], "Batalha (MWm)": p.ro[0]*r["vt"][0],
+        "Mês": r["mes"], "Carga (MWm)": r["carga"], "Batalha (MWm)": p.ro[0]*r["vt"][0],
         "Serra (MWm)": p.ro[1]*r["vt"][1], "Baliza (MWm)": r["gt1"],
         "Candeias (MWm)": r["gt2"], "Déficit (MWm)": r["def"],
         "VI Batalha (hm³)": r["VI"][0], "VI Serra (hm³)": r["VI"][1],

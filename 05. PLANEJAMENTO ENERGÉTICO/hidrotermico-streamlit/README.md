@@ -4,9 +4,17 @@ Aplicativo Streamlit com Apache ECharts, programação dinâmica e SCIP, baseado
 
 ## Horizonte e dados
 
-O padrão é **12 meses**, começando em setembro. O controle **Número de meses** aceita de **1 a 60** na interface; o modelo aceita qualquer inteiro positivo. Para horizontes acima de 12 meses, os rótulos identificam os ciclos anuais.
+O padrão é **12 meses**, começando em janeiro e terminando em dezembro no horizonte anual. O controle **Número de meses** aceita de **1 a 60** na interface; o modelo aceita qualquer inteiro positivo. Para horizontes acima de 12 meses, os rótulos identificam os ciclos anuais.
 
-Setembro, outubro e novembro mantêm as afluências do notebook. Os meses adicionais iniciam com as afluências de novembro apenas como **exemplo editável**, não como dados históricos ou previsão hidrológica. Edite a tabela de afluências para representar seu cenário. Afluências e escolhas da trajetória já editadas são preservadas ao reduzir e depois ampliar o horizonte na mesma sessão.
+O cenário inicial usa **máximas de 220 m³/s em Batalha e 350 m³/s em Serra**, com mínimas de 30 e 20 m³/s, respectivamente. São valores de demonstração editáveis, não séries históricas nem previsões. O objetivo é reduzir o déficit associado ao cenário máximo anterior. A trajetória inicial usa todas as máximas.
+
+Na lateral, **Ajustar afluências** permite aplicar as mesmas faixas a todos os meses ou editar cada mês separadamente. Em cada barra, a ponta esquerda é a mínima e a direita é a máxima. Os valores são afluências locais; a água da Batalha que segue para Serra continua entrando pelo balanço da cascata. A tabela do painel mostra exatamente os valores usados.
+
+**Trajetória de afluências** oferece todas máximas, todas mínimas ou escolhas personalizadas por mês. A política continua considerando dois cenários equiprováveis; a trajetória seleciona o cenário realizado em cada mês.
+
+Em **Modo da carga**, escolha **Constante** para uma única demanda ou **Por mês** para editar a tabela de MW médios de janeiro a dezembro. A demanda de cada mês é usada na recursão, na simulação, na linha de carga dos gráficos e nas tabelas exportadas. A carga mensal e as afluências mensais são preservadas ao reduzir/ampliar o horizonte ou alternar os modos.
+
+Os limites de geração não foram ampliados. Com os parâmetros padrão, a capacidade máxima instantânea do conjunto é aproximadamente 268,14 MW médios. Cargas acima da capacidade podem exigir déficit mesmo com água abundante.
 
 O recálculo automático vem ativado. Desative-o para editar vários campos antes de clicar em **Recalcular agora**. O padrão de discretização continua em 24 níveis por UHE. O planejamento resolve `2 × número de meses × NR_DISC²` despachos: são **13.824** para 12 meses com 24 níveis. A primeira execução pode levar vários minutos, dependendo da máquina. A política é reutilizada quando apenas o volume inicial ou a trajetória muda.
 
@@ -42,18 +50,19 @@ Em uma nova publicação, entre em [Streamlit Community Cloud](https://share.str
 
 ## Usar e exportar
 
-- Barra lateral: horizonte, carga, discretização, armazenamento inicial e trajetória mensal.
-- **Editar afluências e parâmetros das usinas**: afluências locais, limites, produtibilidades, capacidades térmicas e custos.
+- Barra lateral: horizonte, modo da carga, discretização, barras de afluência mínima/máxima, trajetória e armazenamento inicial.
+- **Carga por mês**: tabela editável de demandas, exibida ao escolher o modo mensal.
+- **Ver afluências e editar parâmetros das usinas**: afluências efetivas, limites, produtibilidades, capacidades térmicas e custos.
 - **Operação e armazenamento**: geração, déficit, volumes e custos imediatos para o horizonte inteiro.
 - **Custos futuros**: mapa de calor ou superfície 3D em qualquer mês selecionado.
 - **Dados e exportação**: tabelas mensais, parâmetros JSON e ZIP com todos os resultados.
-- **Restaurar cenário padrão**: recupera os 12 meses e os valores iniciais de exemplo.
+- **Restaurar cenário padrão**: recupera janeiro a dezembro, carga constante de 250 MW médios, as novas faixas de exemplo e a trajetória de máximas.
 
-Os CSVs usam separador `;`, vírgula decimal e UTF-8 com BOM. Os parâmetros exportados incluem `n_meses`, afluências e trajetória completas. JSONs antigos de três meses têm seu horizonte inferido a partir das afluências.
+Os CSVs usam separador `;`, vírgula decimal e UTF-8 com BOM. Os parâmetros exportados incluem `n_meses`, afluências e trajetória completas e `cargas_mensais` (nulo para carga constante). A tabela de resultados inclui a carga efetivamente aplicada em cada mês. JSONs antigos de três meses têm seu horizonte inferido a partir das afluências.
 
 ## Fidelidade matemática
 
-A extensão altera o número de estágios e as dimensões das entradas. A formulação de cada despacho é preservada:
+A extensão altera o número de estágios e as dimensões das entradas. A carga mensal substitui somente a demanda do estágio no balanço energético; as variáveis, demais restrições, objetivo e solver são preservados:
 
 - Dois cenários conjuntos equiprováveis: ambas as UHEs no máximo ou ambas no mínimo, independentes entre meses.
 - Transferência integral do turbinamento e vertimento de Batalha para Serra no mesmo estágio.
@@ -66,7 +75,7 @@ A extensão altera o número de estágios e as dimensões das entradas. A formul
 
 O custo esperado inicial é a média dos custos totais dos dois cenários. O custo realizado soma os custos imediatos da trajetória escolhida. Não se deve somar FOB, pois isso repetiria os custos futuros. A política ótima em expectativa não garante menor custo em toda trajetória individual.
 
-O notebook original está preservado em `reference/original.ipynb`. Para reproduzir suas entradas, selecione três meses. Os testes comparam diretamente as células auditadas do notebook com o modelo, inclusive após ampliar a lista de meses.
+O notebook original está preservado em `reference/original.ipynb`. Para reproduzir numericamente suas entradas, use três meses e informe as afluências originais do arquivo. Os testes mantêm uma configuração de referência com esses valores; o calendário da interface agora sempre começa em janeiro. Os testes comparam diretamente as células auditadas do notebook com o modelo, inclusive após ampliar a lista de meses.
 
 ## Testes
 
@@ -77,6 +86,6 @@ python -m pip install -r "05. PLANEJAMENTO ENERGÉTICO/hidrotermico-streamlit/re
 python -m pytest -c "05. PLANEJAMENTO ENERGÉTICO/hidrotermico-streamlit/pytest.ini" "05. PLANEJAMENTO ENERGÉTICO/hidrotermico-streamlit/tests" -q
 ```
 
-O workflow `.github/workflows/hidrotermico.yml` executa a suíte em Linux/Python 3.12. Há verificações de equivalência com o notebook, horizonte de um mês, horizontes de 12 meses e superiores, balanços, custo terminal, validação, preservação das edições e recálculo da interface.
+O workflow `.github/workflows/hidrotermico.yml` executa a suíte em Linux/Python 3.12. Há verificações de equivalência com o notebook, horizonte de um mês, horizontes de 12 meses e superiores, balanços, custo terminal, validação, preservação das edições, carga mensal inclusive zero e picos acima da capacidade, controles laterais de afluência, trajetórias e recálculo da interface.
 
 Referências oficiais: [organização no Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/file-organization), [dependências](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/app-dependencies), [PySCIPOpt](https://pyscipopt.readthedocs.io/en/stable/install.html), [ECharts para Streamlit](https://github.com/andfanilo/streamlit-echarts).

@@ -22,7 +22,7 @@ def generation(p, trajectory):
     names = ["Batalha", "Serra do Facão", "BBF Baliza", "ERB Candeias", "Déficit"]
     rows = [[p.ro[0]*r["vt"][0], p.ro[1]*r["vt"][1], r["gt1"], r["gt2"], max(0, r["def"])] for r in trajectory]
     o.update({"xAxis": {"type": "category", "data": list(p.meses)},
-              "yAxis": {"type": "value", "name": "MW médios", "min": 0, "max": max(p.carga*1.15, 1)},
+              "yAxis": {"type": "value", "name": "MW médios", "min": 0, "max": max(float(p.cargas.max())*1.15, 1)},
               "series": [{"name": name, "type": "bar", "stack": "geracao", "barMaxWidth": 74,
                           "data": [float(r[i]) for r in rows],
                           "label": {"show": p.n_meses <= 6, "position": "inside", "color": "#fff",
@@ -30,7 +30,7 @@ def generation(p, trajectory):
                          for i, name in enumerate(names)]})
     if p.n_meses > 6:
         o["xAxis"]["axisLabel"] = {"formatter": JsCode("v => v.slice(0, 3) + (v.includes('ciclo') ? '/' + v.split(' ').pop() : '')")}
-    o["series"].append({"name": "Carga", "type": "line", "symbol": "none", "data": [p.carga]*p.n_meses,
+    o["series"].append({"name": "Carga", "type": "line", "symbol": "none", "data": p.cargas.tolist(),
                         "lineStyle": {"color": "#344454", "type": "dashed", "width": 1.5}, "itemStyle": {"color": "#344454"}})
     return o
 
