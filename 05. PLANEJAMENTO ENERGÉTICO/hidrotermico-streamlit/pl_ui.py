@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_echarts import st_echarts
 
-import charts
+import pl_charts as charts
 from pl_model import pl_unico_det, sistema_colab, tabela_det, validar_sistema_det
 
 CALENDARIO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',

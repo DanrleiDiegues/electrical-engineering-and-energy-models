@@ -27,7 +27,7 @@ def test_pl_reproduz_colab_e_balanços():
 
 def test_pl_carga_variavel_e_graficos():
     novo_pl()  # Registra o componente ECharts no runtime Streamlit.
-    import charts
+    import pl_charts as charts
     s = sistema_colab()
     s['DGer']['Carga'] = [0., 300., 180.]
     r = pl_unico_det(s, 0)
