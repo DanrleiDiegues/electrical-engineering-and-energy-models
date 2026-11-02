@@ -115,8 +115,12 @@ def test_pl_mensal_horizonte_e_modos_preservados():
 
 def test_pl_perfil_anual_e_afluencias_constantes():
     app = novo_pl()
+    app.number_input(key='pl_input_carga').set_value(300.).run()
+    app.radio(key='pl_input_load_mode').set_value('Por mês').run()
     app.selectbox(key='pl_input_profile').set_value('Anual (janeiro a dezembro)').run()
     assert not app.exception
+    assert app.number_input(key='pl_input_carga').value == 250.
+    assert app.radio(key='pl_input_load_mode').value == 'Constante'
     assert len(app.session_state['pl_solution']['trajetoria']) == 12
     assert max(r['def'] for r in app.session_state['pl_solution']['trajetoria']) < 1e-5
     import json
@@ -126,6 +130,14 @@ def test_pl_perfil_anual_e_afluencias_constantes():
     app.number_input(key='pl_input_afl_s').set_value(0.).run()
     assert not app.exception
     assert sum(r['def'] for r in app.session_state['pl_solution']['trajetoria']) > 0
+    app.radio(key='pl_input_load_mode').set_value('Por mês').run()
+    app.selectbox(key='pl_input_profile').set_value('Exemplo do Colab (3 meses)').run()
+    assert not app.exception
+    assert app.selectbox(key='pl_input_inicio').value == 'Setembro'
+    assert app.number_input(key='pl_input_carga').value == 250.
+    assert app.radio(key='pl_input_load_mode').value == 'Constante'
+    assert app.session_state['pl_monthly_seed']['Mês'].tolist() == ['Setembro', 'Outubro', 'Novembro']
+    assert app.session_state['pl_solution']['custo_total'] == pytest.approx(22138227.67668162, abs=.1)
 
 
 def test_pl_validacao_sem_metricas():

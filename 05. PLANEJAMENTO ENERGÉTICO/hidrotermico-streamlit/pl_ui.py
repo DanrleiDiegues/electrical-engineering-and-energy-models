@@ -22,9 +22,22 @@ def calcular_pl(sistema):
 
 
 def reset_pl(keep_profile=False):
+    perfil = st.session_state.get('pl_input_profile', 'Exemplo do Colab (3 meses)') if keep_profile else 'Exemplo do Colab (3 meses)'
+    versao = st.session_state.get('pl_editor_version', 0) + 1
     for key in list(st.session_state):
-        if key.startswith('pl_') and not (keep_profile and key == 'pl_input_profile'):
+        if key.startswith('pl_'):
             del st.session_state[key]
+    anual = perfil.startswith('Anual')
+    # Valores explícitos também atualizam os controles que já estão no navegador.
+    st.session_state.update({
+        'pl_input_profile': perfil, 'pl_input_n': 12 if anual else 3,
+        'pl_input_inicio': 'Janeiro' if anual else 'Setembro',
+        'pl_input_load_mode': 'Constante', 'pl_input_carga': 250.,
+        'pl_input_constant_afl': anual, 'pl_input_afl_b': 220. if anual else 20.,
+        'pl_input_afl_s': 350. if anual else 24., 'pl_input_vi_0': 39.7,
+        'pl_input_vi_1': 50.2, 'pl_input_cdef': 4000., 'pl_input_auto': True,
+        'pl_input_serra': 212.58, 'pl_editor_version': versao,
+    })
 
 
 def trocar_perfil():
@@ -76,6 +89,8 @@ def mostrar_pl():
         st.caption('Um único PL para todos os meses. A trajetória de afluências é conhecida; não há discretização dos volumes.')
 
     meses = gerar_meses(n, inicio)
+    versao = st.session_state.get('pl_editor_version', 0)
+    sufixo = f'_v{versao}' if versao else ''
     st.subheader('PL Único · planejamento determinístico')
     st.caption('Mesma formulação do Colab, resolvida com SCIP. O exemplo de três meses reproduz suas entradas; o perfil anual usa afluências demonstrativas editáveis.')
     linhas = deepcopy(st.session_state.get('pl_saved_monthly', []))
@@ -90,7 +105,7 @@ def mostrar_pl():
     if modo_carga == 'Constante':
         dados.iloc[:, 2] = carga
     dados.insert(0, 'Mês', meses)
-    chave = f'pl_editor_monthly_{n}_{inicio}_{modo_carga}_{constantes}'
+    chave = f'pl_editor_monthly_{n}_{inicio}_{modo_carga}_{constantes}{sufixo}'
     if chave not in st.session_state:
         st.session_state['pl_monthly_seed'] = dados.copy()
     else:
@@ -133,7 +148,7 @@ def mostrar_pl():
             'Produtibilidade (MW/(m³/s))': [u['Prod']*2.592 for u in base['UHE']],
         })
         hyd = st.data_editor(st.session_state.get('pl_saved_hyd', hyd), disabled=['Usina'],
-                             hide_index=True, width='stretch', key='pl_editor_hyd',
+                             hide_index=True, width='stretch', key=f'pl_editor_hyd{sufixo}',
                              column_config={c: st.column_config.NumberColumn(min_value=0., required=True, format='%.6f') for c in hyd.columns if c != 'Usina'})
         st.session_state['pl_saved_hyd'] = hyd.copy()
         potencia_serra = float(st.number_input('Potência nominal de Serra (MW)', min_value=0., value=212.58, step=1., key='pl_input_serra'))
@@ -141,7 +156,7 @@ def mostrar_pl():
                              'Potência máxima (MW)': [u['Capac'] for u in base['UTE']],
                              'Custo (R$/MWh)': [u['Custo']/720 for u in base['UTE']]})
         term = st.data_editor(st.session_state.get('pl_saved_thermal', term), disabled=['Usina'],
-                              hide_index=True, width='stretch', key='pl_editor_thermal',
+                              hide_index=True, width='stretch', key=f'pl_editor_thermal{sufixo}',
                               column_config={c: st.column_config.NumberColumn(min_value=0., required=True, format='%.2f') for c in term.columns if c != 'Usina'})
         st.session_state['pl_saved_thermal'] = term.copy()
     try:
