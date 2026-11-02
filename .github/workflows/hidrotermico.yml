@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - '05. PLANEJAMENTO ENERGÉTICO/hidrotermico-streamlit/**'
+      - '05. PLANEJAMENTO ENERGÉTICO/exemplo-pysddp-pl-unico/**'
       - '.github/workflows/hidrotermico.yml'
       - '.streamlit/config.toml'
       - 'requirements.txt'
@@ -11,6 +12,7 @@ on:
   pull_request:
     paths:
       - '05. PLANEJAMENTO ENERGÉTICO/hidrotermico-streamlit/**'
+      - '05. PLANEJAMENTO ENERGÉTICO/exemplo-pysddp-pl-unico/**'
       - '.github/workflows/hidrotermico.yml'
       - '.streamlit/config.toml'
       - 'requirements.txt'
@@ -35,3 +37,17 @@ jobs:
             05. PLANEJAMENTO ENERGÉTICO/hidrotermico-streamlit/requirements-dev.txt
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pytest -q
+  leitores:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: '05. PLANEJAMENTO ENERGÉTICO/exemplo-pysddp-pl-unico'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: '05. PLANEJAMENTO ENERGÉTICO/exemplo-pysddp-pl-unico/requirements.txt'
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pytest test_leitores.py -q

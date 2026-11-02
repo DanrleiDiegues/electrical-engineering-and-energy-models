@@ -2,7 +2,17 @@
 
 Aplicativo Streamlit com Apache ECharts, programação dinâmica e SCIP, baseado no notebook `planejamento_hidrotermico_3_estágios_2_UHE.ipynb`.
 
-## Horizonte e dados
+## Métodos disponíveis
+
+A aba **PDE Didática** mantém a recursão estocástica na grade e os controles existentes. A aba **PL Único** reúne todos os estágios em um PL contínuo com afluências conhecidas. As abas têm controles laterais, resultados e estados independentes; apenas o método selecionado é executado.
+
+O PL Único reutiliza as funções da seção correspondente do Colab em `pl_model.py`. Seu perfil inicial reproduz os três meses do Colab (custo aproximadamente R$ 22,14 milhões); o perfil **Anual** começa em janeiro e termina em dezembro, com entradas demonstrativas editáveis. Há carga constante ou mensal, afluências constantes ou mensais, volumes iniciais, parâmetros das usinas e recálculo automático ou manual. Gráficos em Apache ECharts e exportações pertencem à execução de cada método.
+
+Para abrir diretamente o PL Único no Cloud, use `?metodo=PL%20%C3%9Anico` na URL. O custo determinístico do PL não é o custo esperado dos cenários da PDE.
+
+O [exemplo independente com leitores PySDDP](../exemplo-pysddp-pl-unico/README.md) lê arquivos públicos do próprio projeto e resolve o PL com SCIP. Seus dados não substituem automaticamente os parâmetros dos dois simuladores.
+
+## Horizonte e dados (PDE Didática)
 
 O padrão é **12 meses**, começando em janeiro e terminando em dezembro no horizonte anual. O controle **Número de meses** aceita de **1 a 60** na interface; o modelo aceita qualquer inteiro positivo. Para horizontes acima de 12 meses, os rótulos identificam os ciclos anuais.
 

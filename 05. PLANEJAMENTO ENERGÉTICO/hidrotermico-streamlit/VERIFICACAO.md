@@ -1,10 +1,16 @@
-# Verificação — afluências ajustáveis e carga mensal
+# Verificação — PDE Didática e PL Único
 
-Verificado em 22/10/2026, com Python 3.12 e as dependências fixadas no requirements.txt da raiz.
+Verificado em 02/11/2026, com Python 3.12 e as dependências fixadas no requirements.txt da raiz.
 
 ## Resultado
 
-**44 testes aprovados em 107,31 segundos**, executados com `python -m pytest -q` na cópia de trabalho da versão a publicar, em Windows.
+**52 testes aprovados em 207,50 segundos**, executados com `python -m pytest -q` na cópia de trabalho da versão a publicar, em Windows. Os 44 testes existentes da PDE foram mantidos; oito testes cobrem o PL e sua interface.
+
+O PL reproduziu o custo de referência do Colab: **R$ 22.138.227,67668162**, sem déficit. Foram conferidos balanços físicos, carga variável, calendário anual, validação das entradas, recálculo manual sem resultados desatualizados, persistência das edições e independência dos controles ao alternar os métodos. As funções de modelagem foram extraídas do notebook, mantendo suas restrições e objetivo em PySCIPOpt/SCIP.
+
+O exemplo separado `../exemplo-pysddp-pl-unico/` passou em **três testes adicionais**: leitura dos arquivos públicos com hashes fixos, conferência dos balanços e comparação com um PL montado independentemente no SciPy/HiGHS. O problema é resolvido com SCIP; o HiGHS é usado somente como verificação. Custo do exemplo: **R$ 3.257.660,9382788953**, sem déficit. A amostra pública do PySDDP (setembro a novembro de 2017) não é uma exportação do caso 103. Hipóteses de conversão estão documentadas no exemplo.
+
+Os dois notebooks foram executados integralmente. O notebook principal preserva as células anteriores e os gráficos comparativos, acrescentando gráficos individuais de despacho, armazenamento e custo para cada método, além da convergência da PDDD.
 
 A suíte inclui:
 
