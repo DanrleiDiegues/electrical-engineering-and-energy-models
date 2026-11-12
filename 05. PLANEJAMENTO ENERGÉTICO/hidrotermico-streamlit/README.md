@@ -22,6 +22,11 @@ A seção **Carga da semana** mostra a carga base (média, pico e energia semana
 
 O recálculo é automático por padrão. Desative-o para editar vários parâmetros e clique em **Recalcular agora**; até lá, os resultados anteriores permanecem na tela com um aviso. A seção **Resultado** traz custos (total, imediato com partidas e futuro), déficit, volume final de Batalha, partidas, energia hidrelétrica e térmica, além dos gráficos e do CSV do despacho. Valores alterados em relação ao cadastro representam hipóteses de estudo, não dados de operação.
 
+## Atualizações recentes
+
+- **DESSEM semanal**: arquivos de entrada lidos pelo PySDDP (diagnóstico do catálogo), seleção automática de usinas, CMO e CMA por meia hora e por dia, impacto de uma carga adicional em uma hora, comparação com e sem função de custo futuro e explicação do despacho de Candeias (ordem de mérito).
+- **PL Único em árvore**: parâmetros editáveis (carga, déficit, afluências, volumes, engolimento, produtibilidade, potência e CVU das térmicas), horizonte de 3 a 8 meses e folhas destacadas, com tabela de trajetórias finais.
+
 ## Horizonte e dados (PDE Didática)
 
 O padrão é **12 meses**, começando em janeiro e terminando em dezembro no horizonte anual. O controle **Número de meses** aceita de **1 a 60** na interface; o modelo aceita qualquer inteiro positivo. Para horizontes acima de 12 meses, os rótulos identificam os ciclos anuais.

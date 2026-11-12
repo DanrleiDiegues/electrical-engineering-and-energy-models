@@ -13,7 +13,8 @@ demanda_semana = np.tile(perfil_dia,7) + np.repeat([0,1,0,2,0,-5,-7],24)
 from math import ceil
 from copy import deepcopy
 
-def despachar_semana(unidades, demanda, usar_fcf=True, limite_s=120):
+def despachar_semana(unidades, demanda, usar_fcf=True, limite_s=120, fixos=None):
+    """Resolve o compromisso semanal. Com `fixos`, resolve o LP com estados e eventos fixos e devolve os duais (CMO e CMA)."""
     horas = range(len(demanda))
     passos = range(2*len(demanda))
     dt, fator = 0.5, 0.0018  # meia hora e hm³ por m³/s a cada meia hora
@@ -21,15 +22,26 @@ def despachar_semana(unidades, demanda, usar_fcf=True, limite_s=120):
     m.hideOutput()
     m.setRealParam("numerics/feastol",1e-8)
     m.setRealParam("limits/time",float(limite_s))
+    if fixos is not None:
+        # Com os binários fixos o problema é linear: os duais do balanço de carga e do balanço hídrico são os custos marginais.
+        m.setPresolve(SCIP_PARAMSETTING.OFF); m.setHeuristics(SCIP_PARAMSETTING.OFF)
+        m.disablePropagation(); m.setBoolParam("lp/alwaysgetduals", True)
+
+    def binaria(grupo, nome_var, chave):
+        if fixos is None:
+            return m.addVar(vtype="B", name=nome_var)
+        valor = float(fixos[grupo][chave])
+        return m.addVar(lb=valor, ub=valor, name=nome_var)
+
     u, ligar, desligar, p, normal = {}, {}, {}, {}, {}
     for nome, d in unidades.items():
         ton, toff = d["Ton"], d["Toff"]
         if min(ton,toff) < 1 or int(ton)!=ton or int(toff)!=toff:
             raise ValueError("Ton e Toff devem ser números inteiros positivos de horas.")
         for h in horas:
-            u[nome,h] = m.addVar(vtype="B", name=f"ligada_{nome}_{h}")
-            ligar[nome,h] = m.addVar(vtype="B",name=f"partida_{nome}_{h}")
-            desligar[nome,h] = m.addVar(vtype="B",name=f"desligamento_{nome}_{h}")
+            u[nome,h] = binaria("u", f"ligada_{nome}_{h}", (nome,h))
+            ligar[nome,h] = binaria("ligar", f"partida_{nome}_{h}", (nome,h))
+            desligar[nome,h] = binaria("desligar", f"desligamento_{nome}_{h}", (nome,h))
         for h in horas:
             anterior = u[nome,h-1] if h else d["u0"]
             y, w = ligar[nome,h], desligar[nome,h]
@@ -73,15 +85,15 @@ def despachar_semana(unidades, demanda, usar_fcf=True, limite_s=120):
             fim=k+1+len(d["D"])
             if fim%2==0 and fim//2<len(demanda):
                 m.addCons(g<=d["Pmin"]+d["Pmax"]*(1-desligar[nome,fim//2]))
-    vol, vazao, vert, deficit = {}, {}, {}, {}
+    vol, vazao, vert, deficit, cons_agua, cons_carga = {}, {}, {}, {}, {}, {}
     for k in passos:
         vol[k]=m.addVar(lb=HIDRO["Vmin"],ub=HIDRO["Vmax"])
         vazao[k]=m.addVar(lb=0,ub=HIDRO["Qmax"])
         vert[k]=m.addVar(lb=0)
         deficit[k]=m.addVar(lb=0)
         vi=vol[k-1] if k else HIDRO["VI"]
-        m.addCons(vol[k]==vi+fator*(AFLUENCIA-vazao[k]-vert[k]))
-        m.addCons(HIDRO["rho"]*vazao[k]+quicksum(p[n,k] for n in unidades)+deficit[k]==demanda[k//2])
+        cons_agua[k]=m.addCons(vol[k]==vi+fator*(AFLUENCIA-vazao[k]-vert[k]))
+        cons_carga[k]=m.addCons(HIDRO["rho"]*vazao[k]+quicksum(p[n,k] for n in unidades)+deficit[k]==demanda[k//2])
     futuro=m.addVar(lb=0,ub=None if usar_fcf else 0)
     if usar_fcf:
         for alvo, valor in CORTES:
@@ -93,6 +105,11 @@ def despachar_semana(unidades, demanda, usar_fcf=True, limite_s=120):
     try:
         m.optimize()
         if not m.getNSols(): raise RuntimeError(f"SCIP sem solução viável: {m.getStatus()}")
+        if fixos is not None:
+            # CMO em R$/MWh e CMA em R$/hm³; o objetivo foi dividido por 1e6 e o intervalo dura dt horas.
+            return dict(cmo=[m.getDualsolLinear(cons_carga[k])*1e6/dt for k in passos],
+                        cma=[-m.getDualsolLinear(cons_agua[k])*1e6 for k in passos],
+                        total=m.getObjVal()*1e6)
         melhor=m.getBestSol()
         val=lambda x: m.getSolVal(melhor,x)
         for variaveis in (u,ligar,desligar):
@@ -104,9 +121,28 @@ def despachar_semana(unidades, demanda, usar_fcf=True, limite_s=120):
         estados=pd.DataFrame([{ "hora":h, "unidade":n, "ligada":round(val(u[n,h])),
                          "partida":round(val(ligar[n,h])), "desligada":round(val(desligar[n,h]))}
                          for n in unidades for h in horas])
-        return dict(meia=meia, estados=estados, status=str(m.getStatus()),gap=m.getGap(),
-                    imediato=val(imediato)+val(partida),futuro=val(futuro),total=m.getObjVal()*1e6,
-                    inferior=m.getDualbound()*1e6, segundos=m.getSolvingTime())
+        resultado = dict(meia=meia, estados=estados, status=str(m.getStatus()),gap=m.getGap(),
+                         imediato=val(imediato)+val(partida),futuro=val(futuro),total=m.getObjVal()*1e6,
+                         inferior=m.getDualbound()*1e6, segundos=m.getSolvingTime(),
+                         mwh_por_hm3=HIDRO["rho"]*dt/fator, marginais=False)
+        fixados = {"u": {(n,h): round(val(u[n,h])) for n in unidades for h in horas},
+                   "ligar": {(n,h): round(val(ligar[n,h])) for n in unidades for h in horas},
+                   "desligar": {(n,h): round(val(desligar[n,h])) for n in unidades for h in horas}}
     finally:
         m.freeProb()
+    try:
+        lp = despachar_semana(unidades, demanda, usar_fcf, limite_s, fixos=fixados)
+        meia = resultado["meia"]
+        meia["cmo"], meia["cma"] = lp["cmo"], lp["cma"]
+        meia["cma_mwh"] = meia["cma"] / resultado["mwh_por_hm3"]
+        resultado["marginais"] = abs(lp["total"] - resultado["total"]) <= 1e-3 * max(1., abs(resultado["total"]))
+    except RuntimeError:
+        pass
+    return resultado
 
+
+def impacto_carga(unidades, demanda, usar_fcf, hora, delta):
+    """Variação do custo total ao somar `delta` MW à carga de uma hora, com o compromisso reotimizado."""
+    nova = np.array(demanda, dtype=float)
+    nova[hora] += delta
+    return despachar_semana(unidades, nova, usar_fcf)["total"]

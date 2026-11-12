@@ -83,6 +83,68 @@ def grafico_carga(base_mw, ajustada_mw, capacidade, chave):
     st_echarts(op, height="300px", key=chave)
 
 
+def _degrau(meia, coluna):
+    """Pontos [hora, valor] de uma grandeza constante em cada meia hora, com o último degrau fechado."""
+    pontos = [[float(h), float(v)] for h, v in zip(meia.hora, meia[coluna])]
+    pontos.append([float(meia.hora.iloc[-1]) + 0.5, pontos[-1][1]])
+    return pontos
+
+
+def grafico_cmo(meia, chave):
+    """CMO a cada meia hora e média de cada dia, em R$/MWh."""
+    dia = (meia.hora // 24).astype(int)
+    media = meia.assign(media_dia=meia.groupby(dia)["cmo"].transform("mean"))
+    series = [{"name": "CMO a cada meia hora", "type": "line", "step": "end", "symbol": "none",
+               "data": _degrau(meia, "cmo"), "lineStyle": {"width": 1.6}, "areaStyle": {"opacity": 0.12}},
+              {"name": "Média do dia", "type": "line", "step": "end", "symbol": "none",
+               "data": _degrau(media, "media_dia"), "itemStyle": {"color": "#D69B35"},
+               "lineStyle": {"width": 2.2, "type": "dashed"}}]
+    op = base()
+    op.update(xAxis={"type": "value", "name": "Hora da semana", "interval": 24, "min": 0, "max": 168},
+              yAxis={"type": "value", "name": "R$/MWh", "min": 0}, series=series)
+    st_echarts(op, height="330px", key=chave)
+
+
+def grafico_cma(meia, mwh_por_hm3, chave):
+    """CMA a cada meia hora em R$/hm³, com o equivalente em R$/MWh no eixo da direita."""
+    maximo = max(float(meia.cma.max()) * 1.15, 1.)
+    op = base()
+    op.update(xAxis={"type": "value", "name": "Hora da semana", "interval": 24, "min": 0, "max": 168},
+              yAxis=[{"type": "value", "name": "R$/hm³", "min": 0, "max": maximo},
+                     {"type": "value", "name": "R$/MWh equivalente", "min": 0, "max": maximo / mwh_por_hm3,
+                      "splitLine": {"show": False}}],
+              series=[{"name": "CMA", "type": "line", "step": "end", "symbol": "none", "data": _degrau(meia, "cma"),
+                       "itemStyle": {"color": "#176B87"}, "lineStyle": {"width": 2}, "areaStyle": {"opacity": 0.12}}])
+    st_echarts(op, height="300px", key=chave)
+
+
+def grafico_custos(fontes, chave):
+    """Custo de cada fonte em R$/MWh, da mais barata para a mais cara. `fontes`: lista de (nome, custo, cor)."""
+    fontes = sorted(fontes, key=lambda f: f[1])
+    op = base()
+    op.update(grid={"top": 20, "left": 10, "right": 40, "bottom": 40, "containLabel": True},
+              legend={"show": False}, tooltip={"trigger": "item"},
+              xAxis={"type": "value", "name": "R$/MWh"},
+              yAxis={"type": "category", "data": [f[0] for f in fontes], "inverse": True},
+              series=[{"type": "bar", "barMaxWidth": 34,
+                       "data": [{"value": float(c), "itemStyle": {"color": cor}} for _, c, cor in fontes],
+                       "label": {"show": True, "position": "right",
+                                 "formatter": JsCode("p => p.value.toLocaleString('pt-BR', {maximumFractionDigits: 2})")}}])
+    st_echarts(op, height=f"{max(150, 56 * len(fontes) + 60)}px", key=chave)
+
+
+def grafico_volumes(casos, chave):
+    """Volume de Batalha ao longo da semana para um ou mais casos. `casos`: lista de (nome, resultado)."""
+    series = []
+    for nome, r in casos:
+        pontos = [[0, HIDRO["VI"]], *[[h + 0.5, v] for h, v in zip(r["meia"].hora, r["meia"].volume)]]
+        series.append({"name": nome, "type": "line", "showSymbol": False, "data": pontos})
+    op = base()
+    op.update(xAxis={"type": "value", "name": "Hora", "interval": 24, "max": 168},
+              yAxis={"type": "value", "name": "hm³", "scale": True}, series=series)
+    st_echarts(op, height="300px", key=chave)
+
+
 def dados_arvore(caso, arv, sol, conversao):
     nos = {}
     for n, r in arv.items():
@@ -92,16 +154,36 @@ def dados_arvore(caso, arv, sol, conversao):
                   "afl":afl, "vf":vf, "children":[]}
         if r["pai"] is not None:
             nos[r["pai"]]["children"].append(nos[n])
+    for no in nos.values():
+        if not no["children"]:
+            no["folha"] = True
+            no["symbolSize"] = 16
+            no["itemStyle"] = {"color": "#C2410C", "borderColor": "#FFFFFF", "borderWidth": 2}
+            no["label"] = {"position": "right", "distance": 10, "fontSize": 12, "fontWeight": "bold", "color": "#7C2D12",
+                           "backgroundColor": "#FFEDD5", "borderColor": "#FDBA74", "borderWidth": 1, "borderRadius": 4,
+                           "padding": [3, 6], "formatter": f"{no['name']} · {no['prob']}\nVF {no['vf']}"}
     return next(iter(nos.values()))
+
+
+def tabela_folhas(raiz):
+    """Folhas da árvore: uma linha por trajetória final."""
+    linhas, pilha = [], [raiz]
+    while pilha:
+        no = pilha.pop()
+        if no.get("folha"):
+            linhas.append({"Trajetória": no["name"], "Probabilidade": no["prob"],
+                           "AFL no último mês": no["afl"], "Volume final": no["vf"]})
+        pilha.extend(reversed(no["children"]))
+    return linhas
 
 
 def mostrar_arvore(raiz, meses, chave):
     folhas = 2**(meses-1)
     op = {"tooltip":{"trigger":"item","formatter":JsCode("p => 'Mês ' + p.data.mes + ' · ' + p.data.name + '<br>Probabilidade: ' + p.data.prob + '<br>AFL: ' + p.data.afl + '<br>Volume final: ' + p.data.vf + ' hm³'")},
-          "series":[{"type":"tree","data":[raiz],"orient":"LR","left":65,"right":65,"top":20,"bottom":20,
-                     "initialTreeDepth":-1,"expandAndCollapse":False,"roam":True,"symbolSize":6,
+          "series":[{"type":"tree","data":[raiz],"orient":"LR","left":50,"right":210,"top":20,"bottom":20,
+                     "initialTreeDepth":-1,"expandAndCollapse":False,"roam":True,"symbolSize":8,"itemStyle":{"color":"#2F6F7E"},
                      "edgeShape":"polyline","lineStyle":{"color":"#839AA1"},
                      "label":{"position":"inside","fontSize":10,"backgroundColor":"#F2F7F8","borderRadius":4,
                               "padding":[3,4],"formatter":JsCode("p => p.data.name+' · '+p.data.prob+'\\nAFL '+p.data.afl+'\\nVF '+p.data.vf")}}]}
-    st_echarts(op, height=f"{max(290,folhas*62)}px", key=chave)
+    st_echarts(op, height=f"{max(420, folhas*44)}px", key=chave)
 

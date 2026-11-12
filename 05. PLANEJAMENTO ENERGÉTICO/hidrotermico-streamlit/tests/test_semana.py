@@ -100,3 +100,29 @@ def test_grafico_da_carga_inclui_base_ajustada_e_capacidade():
     assert all(len(s["data"]) == 169 for s in series)
     assert series[-1]["markLine"]["data"] == [{"yAxis": capacidade}]
     assert np.isclose(series[-1]["data"][0][1], demanda_semana[0] * 1.2)
+
+
+def test_marginais_e_catalogo():
+    from catalogo_dessem import diagnostico_catalogo
+    app = nova_semana()
+    assert not app.exception
+    total, tabela = diagnostico_catalogo()
+    assert total == 390 and int(tabela["Unidades"].iloc[0]) == 5
+    assert "CMO médio (R$/MWh)" in metricas(app) and "CMA médio (R$/hm³)" in metricas(app)
+
+
+def nova_arvore():
+    app = AppTest.from_file(APP, default_timeout=600)
+    app.session_state["metodo"] = "PL Único em árvore"
+    return app.run()
+
+
+def test_arvore_oito_meses_e_parametros():
+    app = nova_arvore()
+    assert not app.exception
+    base = metricas(app)["Custo esperado (R$)"]
+    app.slider(key="arvore_meses").set_value(8).run()
+    assert not app.exception
+    app.number_input(key="arvore_p_carga").set_value(300.).run()
+    assert not app.exception
+    assert metricas(app)["Custo esperado (R$)"] != base

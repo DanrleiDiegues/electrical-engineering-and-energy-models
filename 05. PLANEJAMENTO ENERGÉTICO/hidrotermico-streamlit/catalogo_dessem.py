@@ -1,5 +1,9 @@
 """Leitores PySDDP 0.0.90 e seleção de unidades representáveis pelo modelo semanal."""
+from collections import Counter
+from functools import lru_cache
 from pathlib import Path
+
+import pandas as pd
 from PySDDP.dessem.script.cadterm import CadTerm
 from PySDDP.dessem.script.operut import Operut
 from PySDDP.dessem.script.rampas import Rampas
@@ -19,10 +23,21 @@ def perfil(curvas, sentido):
     return tuple(valores)
 
 
-def carregar_catalogo():
+@lru_cache(maxsize=1)
+def leitores():
     cad, op, ramp = CadTerm(), Operut(), Rampas()
     for leitor, arquivo in [(cad, "termdat.dat"), (op, "operut.dat"), (ramp, "rampas.dat")]:
         leitor.ler(str(DADOS / arquivo))
+    return cad, op, ramp
+
+
+def carregar_catalogo(motivos=None):
+    """Unidades representáveis pelo modelo. Em `motivos` (Counter) contam-se as unidades descartadas e por quê."""
+    cad, op, ramp = leitores()
+
+    def descartar(texto):
+        if motivos is not None:
+            motivos[texto] += 1
     nomes = {int(r.num_usi): r.nome.strip() for r in cad.cadusit_df.itertuples()}
     combinadas = set(cad.cadconf_df.num_usi.astype(int))
 
@@ -36,13 +51,19 @@ def carregar_catalogo():
     for r in cad.cadunidt_df.itertuples():
         chave = r.num_usi.strip(), r.ind_ger.strip()
         codigo, ug = map(int, chave)
-        if codigo in combinadas or not all(chave in g for g in (iniciais, limites, curvas)):
+        if codigo in combinadas:
+            descartar("Usina com configuração combinada (ciclo combinado)")
+            continue
+        if not all(chave in g for g in (iniciais, limites, curvas)):
+            descartar("Sem registro em operut.dat (INIT ou OPER) ou em rampas.dat")
             continue
         ini, oper, curva = iniciais[chave], limites[chave], curvas[chave]
         if len(ini) != 1 or len(oper) != 1 or set(curva["C"].str.strip()) != {"S"}:
+            descartar("Registro duplicado ou trajetória que não vale para o compromisso (flag C diferente de S)")
             continue
         i, o = ini.iloc[0], oper.iloc[0]
         if i["A/D"].strip() != "0" or o.Gmax.strip() or o.Gmin.strip():
+            descartar("Em partida ou parada no início do estudo, ou com limite horário Gmin/Gmax")
             continue
         try:
             d = dict(codigo=codigo, ug=ug, Pmin=float(r.ger_min), Pmax=float(r.pot),
@@ -52,11 +73,41 @@ def carregar_catalogo():
                      idade=float(i.tempo) + .5 * int(i.MH.strip() or 0),
                      A=perfil(curva, "A"), D=perfil(curva, "D"))
         except ValueError:
+            descartar("Custos ausentes ou trajetória de partida/parada incompleta")
             continue
         if min(d["Ton"], d["Toff"], d["subida"], d["descida"]) <= 0:
+            descartar("Tempos mínimos ou rampas nulos")
             continue
         if not (0 <= d["Pmin"] <= d["Pmax"] and min(d["A"] + d["D"]) >= 0
                 and max(d["A"] + d["D"]) <= d["Pmax"] and d["u0"] in (0, 1)):
+            descartar("Limites inconsistentes (trajetória acima do máximo, mínimo acima do máximo)")
             continue
         catalogo[f"{nomes[codigo]} · UG {ug}"] = d
     return catalogo
+
+
+def diagnostico_catalogo():
+    """Quantas unidades do termdat.dat o modelo aceita e por que as demais ficam de fora."""
+    cad = leitores()[0]
+    motivos = Counter()
+    aceitas = len(carregar_catalogo(motivos))
+    tabela = pd.DataFrame([{"Situação": "Aceitas pelo modelo", "Unidades": aceitas},
+                           *({"Situação": m, "Unidades": n} for m, n in motivos.most_common())])
+    return len(cad.cadunidt_df), tabela
+
+
+def registros_unidade(codigo, ug):
+    """Linhas brutas lidas pelo PySDDP para uma unidade, uma tabela por arquivo e bloco."""
+    cad, op, ramp = leitores()
+    c, g = str(codigo), str(ug)
+
+    def pegar(df, usina, unidade, colunas):
+        linhas = df[(df[usina].str.strip() == c) & (df[unidade].str.strip() == g)][colunas]
+        return linhas.astype(str).apply(lambda col: col.str.strip()).reset_index(drop=True)
+
+    return {
+        "termdat.dat · CADUNIDT": pegar(cad.cadunidt_df, "num_usi", "ind_ger", ["num_usi", "ind_ger", "pot", "ger_min", "temp_on", "temp_off", "custo_frio", "ramp_tom", "ramp_alivio"]),
+        "operut.dat · INIT": pegar(op.condicoes_iniciais_df, "us", "ug", ["us", "nome", "ug", "st", "GerInic", "tempo", "MH", "A/D"]),
+        "operut.dat · OPER": pegar(op.limites_condicoes_df, "us", "un", ["us", "nome", "un", "Gmin", "Gmax", "Custo"]),
+        "rampas.dat · RAMP": pegar(ramp.rampas_df, "us", "uni", ["us", "uni", "C", "T", "Potencia", "Tempo", "FlagMeiaHora"]),
+    }

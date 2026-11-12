@@ -1,10 +1,12 @@
 from copy import deepcopy
 
+import numpy as np
 import pandas as pd
 import streamlit as st
-from graficos_trabalhos import despacho, graficos_semana, grafico_carga, dados_arvore, mostrar_arvore
+from graficos_trabalhos import despacho, graficos_semana, grafico_carga, dados_arvore, mostrar_arvore, tabela_folhas
 from formulacao_trabalhos import formulacao_semana, formulacao_arvore
 
+from analise_semana import (arquivos_de_entrada, com_e_sem_custo_futuro, impacto_da_carga, marginais, merito)
 from catalogo_dessem import carregar_catalogo
 from modelo_arvore import disciplina, quadro, fator, construir_arvore, cortes_da_continuacao, resolver_arvore, rotulo
 from modelo_semana import HIDRO, demanda_semana, despachar_semana
@@ -92,7 +94,9 @@ def semana():
     st.header("Compromisso térmico semanal")
     st.caption("Batalha e duas unidades térmicas • 168 horas • despacho a cada meia hora")
     formulacao_semana()
-    usinas = selecionar("semana", [106, 322])
+    n_termicas = st.sidebar.number_input("Número de térmicas", 1, 4, 2, key="semana_n_termicas",
+                                         help="As unidades vêm do cadastro DESSEM (PySDDP). Veja quais o modelo aceita no painel de arquivos de entrada.")
+    usinas = selecionar("semana", [106, 322, None, None][:n_termicas])
     cadastro = {nome: dict(d) for nome, d in usinas.items()}
     for nome, d in usinas.items():
         with st.sidebar.expander(nome):
@@ -115,6 +119,7 @@ def semana():
                                     "cvu":"CVU (R$/MWh)", "partida":"Partida (R$)", "p0":"Geração inicial (MW)"})
     tabela["Alterado em relação ao cadastro"] = [alteracoes(d, cadastro[n]) for n, d in usinas.items()]
     st.dataframe(tabela)
+    arquivos_de_entrada(usinas)
 
     assinatura = repr((usinas, percentual, custo_futuro))
     if calcular or "semana_assinatura" not in st.session_state or (auto and st.session_state["semana_assinatura"] != assinatura):
@@ -123,7 +128,8 @@ def semana():
         except RuntimeError as exc:
             resultado, erro = None, str(exc)
         st.session_state.update(semana_resultado=resultado, semana_erro=erro,
-                                semana_assinatura=assinatura, semana_usinas=list(usinas))
+                                semana_assinatura=assinatura, semana_usinas=list(usinas),
+                                semana_entradas=(usinas, percentual, custo_futuro))
     r, erro = st.session_state["semana_resultado"], st.session_state["semana_erro"]
     if st.session_state["semana_assinatura"] != assinatura:
         st.info("Entradas alteradas. Clique em Recalcular agora para atualizar os resultados e os gráficos.")
@@ -150,6 +156,11 @@ def semana():
     c[3].metric("Geração térmica (MWh)", f"{meia[nomes].sum().sum() * 0.5:,.1f}")
     st.caption(f"SCIP · {r['status']} · gap {r['gap']:.2%}")
     graficos_semana(r, nomes)
+    entradas = st.session_state["semana_entradas"]
+    marginais(r)
+    merito(r, entradas)
+    impacto_da_carga(r, entradas)
+    com_e_sem_custo_futuro(r, entradas, resolver_semana, nomes)
     with st.expander("Despacho e estados por unidade"):
         st.dataframe(meia)
         st.dataframe(estados)
@@ -172,15 +183,77 @@ def arvore_quadro(meses):
     return dados_arvore(caso, arv, sol, 1.)
 
 
-@st.cache_data(max_entries=24, show_spinner=False)
-def resolver_pl(usinas, meses):
+def termica_padrao(d):
+    """Potência máxima e CVU adotados por padrão: as duas UTEs do estudo mensal mantêm os dados desse estudo."""
+    referencia = {322: 0, 106: 1}.get(d["codigo"]) if d["ug"] == 1 else None
+    if referencia is not None:
+        return float(disciplina["gtmax"][referencia]), float(disciplina["cvu"][referencia])
+    return float(d["Pmax"]), float(d["cvu"])
+
+
+def restaurar_arvore():
+    for chave in [k for k in st.session_state if k.startswith("arvore_p_")]:
+        del st.session_state[chave]
+
+
+def parametros_arvore(usinas):
+    """Controles laterais do PL em árvore. Retorna os parâmetros em estruturas imutáveis, para o cache."""
+    chave = lambda nome: f"arvore_p_{nome}"
+    padroes = {"carga": 250., "cdef": 4000., "afl": 100.}
+    for i in range(2):
+        util = float(disciplina["vmax"][i] - disciplina["vmin"][i])
+        padroes.update({f"vi{i}": round(100 * float(disciplina["vi"][i] - disciplina["vmin"][i]) / util, 1),
+                        f"vmin{i}": float(disciplina["vmin"][i]), f"vmax{i}": float(disciplina["vmax"][i]),
+                        f"qmax{i}": round(float(disciplina["qmax"][i]) / fator, 2),
+                        f"prod{i}": round(float(disciplina["prod"][i]) * fator, 6)})
+    for nome, d in usinas.items():
+        padroes[f"pmax_{nome}"], padroes[f"cvu_{nome}"] = termica_padrao(d)
+    for k, v in padroes.items():
+        st.session_state.setdefault(chave(k), v)
+    with st.sidebar.expander("Parâmetros do estudo"):
+        st.caption("Sistema")
+        carga = st.number_input("Carga mensal (MW médios)", min_value=0., step=10., key=chave("carga"))
+        cdef = st.number_input("Custo do déficit (R$/MWh)", min_value=0., step=100., key=chave("cdef"))
+        afl = st.number_input("Escala das afluências (%)", min_value=1., step=5., key=chave("afl"),
+                              help="Multiplica todas as aberturas de afluência da árvore.")
+        uhes = []
+        for i, nome in enumerate(disciplina["nomes"]):
+            st.caption(nome)
+            vmax = st.number_input("Volume máximo (hm³)", min_value=1., step=10., key=chave(f"vmax{i}"))
+            if st.session_state[chave(f"vmin{i}")] > vmax:
+                st.session_state[chave(f"vmin{i}")] = vmax
+            vmin = st.number_input("Volume mínimo (hm³)", min_value=0., max_value=vmax, step=10., key=chave(f"vmin{i}"))
+            vi = st.slider("Volume inicial (% do útil)", 0., 100., step=0.5, key=chave(f"vi{i}"))
+            qmax = st.number_input("Engolimento (m³/s)", min_value=0., step=5., key=chave(f"qmax{i}"))
+            prod = st.number_input("Produtibilidade (MW/(m³/s))", min_value=0., step=0.01, format="%.4f", key=chave(f"prod{i}"))
+            uhes.append((vmin, vmax, vi, qmax, prod))
+        termicas = []
+        for nome, d in usinas.items():
+            st.caption(nome)
+            pmax = st.number_input("Potência máxima (MW)", min_value=0., step=1., key=chave(f"pmax_{nome}"))
+            cvu = st.number_input("CVU (R$/MWh)", min_value=0., step=1., key=chave(f"cvu_{nome}"))
+            termicas.append((nome, pmax, cvu))
+        st.button("Restaurar parâmetros", key="arvore_restaurar", on_click=restaurar_arvore, width="stretch")
+    return dict(carga=carga, cdef=cdef, afl=afl, uhes=tuple(uhes), termicas=tuple(termicas))
+
+
+@st.cache_data(max_entries=24, show_spinner="Resolvendo o PL em árvore no SCIP…")
+def resolver_pl(usinas, meses, parametros):
     caso = deepcopy(disciplina)
+    p = parametros
+    caso["cdef"] = p["cdef"]
+    caso["carga"] = [p["carga"]] * len(caso["carga"])
+    caso["carga_cont"] = p["carga"]
+    escala = p["afl"] / 100
+    caso["aberturas"] = [[(prob, escala * np.asarray(afl)) for prob, afl in mes] for mes in caso["aberturas"]]
+    caso["afl_cont"] = escala * np.asarray(caso["afl_cont"])
+    for i, (vmin, vmax, vi, qmax, prod) in enumerate(p["uhes"]):
+        caso["vmin"][i], caso["vmax"][i] = vmin, vmax
+        caso["vi"][i] = vmin + vi / 100 * (vmax - vmin)
+        caso["qmax"][i], caso["prod"][i] = qmax * fator, prod / fator
     nomes = list(usinas)
-    for j, (nome, d) in enumerate(usinas.items()):
-        # As duas UTEs que constam no estudo mensal mantêm os dados desse estudo.
-        referencia = {322: 0, 106: 1}.get(d["codigo"]) if d["ug"] == 1 else None
-        caso["gtmax"][j] = disciplina["gtmax"][referencia] if referencia is not None else d["Pmax"]
-        caso["cvu"][j] = disciplina["cvu"][referencia] if referencia is not None else d["cvu"]
+    for j, (nome, pmax, cvu) in enumerate(p["termicas"]):
+        caso["gtmax"][j], caso["cvu"][j] = pmax, cvu
     caso["termicas"] = nomes
     ampliar_horizonte(caso, meses)
     arv = construir_arvore(caso["aberturas"])
@@ -193,26 +266,33 @@ def resolver_pl(usinas, meses):
                        "Custo futuro (R$)": b["alpha"],
                        **{f"Volume {n} (hm³)": v for n,v in zip(caso["nomes"],b["v"])}})
     cadastro = pd.DataFrame({"Unidade": nomes, "Máx. (MW)": caso["gtmax"], "CVU (R$/MWh)": caso["cvu"]})
-    return custo, pd.DataFrame(linhas), cadastro, dados_arvore(caso, arv, resultado, fator)
+    return custo, pd.DataFrame(linhas), cadastro, dados_arvore(caso, arv, resultado, fator), caso["nomes"]
 
 
 def arvore():
     st.header("PL Único em árvore de cenários")
     formulacao_arvore()
-    meses = st.sidebar.slider("Horizonte da árvore (meses)", 3, 6, 3, key="arvore_meses")
+    meses = st.sidebar.slider("Horizonte da árvore (meses)", 3, 8, 3, key="arvore_meses")
     st.caption(f"{meses} meses · {2**meses-1} nós · {2**(meses-1)} trajetórias finais")
     if meses > 3:
         st.caption("Nos meses adicionais, cada nó repete a carga e as duas aberturas de afluência do mês 3, com 50% de probabilidade por ramo. Os cortes passam às folhas do novo horizonte.")
     usinas = selecionar("arvore", [322, 106])
-    custo, df, cadastro, raiz = resolver_pl(usinas, meses)
+    parametros = parametros_arvore(usinas)
+    try:
+        custo, df, cadastro, raiz, nomes_uhe = resolver_pl(usinas, meses, parametros)
+    except RuntimeError as exc:
+        st.warning(f"O PL ficou inviável ou não convergiu com estes parâmetros ({exc}). Confira volumes, engolimento e carga.")
+        return
     st.dataframe(cadastro, hide_index=True)
-    st.caption("Baliza UG 1 e Candeias UG 1 usam potência e CVU do estudo mensal do Colab. As demais unidades usam o cadastro DESSEM lido pelo PySDDP.")
+    st.caption("Baliza UG 1 e Candeias UG 1 partem da potência e do CVU do estudo mensal do Colab. As demais unidades partem do cadastro DESSEM lido pelo PySDDP. Todos os valores podem ser alterados em Parâmetros do estudo.")
     st.metric("Custo esperado (R$)", f"{custo:,.2f}")
     st.subheader("Árvores de cenários")
     caso_real, caso_quadro = st.tabs(["Batalha e Serra do Facão", "Cenário Base"])
     with caso_real:
-        st.caption("Em cada nó, os valores aparecem na ordem Batalha / Serra do Facão. AFL é a afluência local em m³/s e VF é o volume final em hm³. Arraste ou use o zoom para explorar.")
+        st.caption("Em cada nó, os valores aparecem na ordem Batalha / Serra do Facão. AFL é a afluência local em m³/s e VF é o volume final em hm³. As folhas aparecem em laranja, com rótulo próprio. Arraste ou use o zoom para explorar.")
         mostrar_arvore(raiz, meses, "arv_real")
+        with st.expander("Folhas da árvore (trajetórias finais)"):
+            st.dataframe(pd.DataFrame(tabela_folhas(raiz)), hide_index=True)
     with caso_quadro:
         st.caption("Caso didático do Colab com uma UHE e duas térmicas de referência. AFL é dada em hm³ por estágio e VF em hm³. Os seletores de térmicas se aplicam ao caso Batalha e Serra do Facão.")
         mostrar_arvore(arvore_quadro(meses), meses, "arv_quadro")
