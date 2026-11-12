@@ -1,3 +1,4 @@
+from copy import deepcopy
 import numpy as np
 import pandas as pd
 from pyscipopt import Model, quicksum, SCIP_PARAMSETTING
@@ -114,3 +115,37 @@ def resolver_arvore(c,arvore,cortes=()):
     finally:
         m.freeProb()
 
+
+def ampliar_horizonte(caso, meses):
+    """Estende carga e aberturas até `meses`, repetindo o último mês."""
+    for campo in ("carga", "aberturas"):
+        ultimo = caso[campo][-1]
+        caso[campo].extend(deepcopy(ultimo) for _ in range(meses-len(caso[campo])))
+
+
+def estudo_arvore(termicas, meses, p):
+    """Resolve o PL único em árvore de Batalha e Serra do Facão com os parâmetros `p`.
+
+    termicas: nomes das térmicas, na mesma ordem de p["termicas"].
+    p: dict com carga (MW médios), cdef (R$/MWh), afl (% das afluências),
+       uhes (lista de tuplas vmin, vmax, vi %, qmax, prod) e termicas (lista de tuplas nome, pmax, cvu).
+    Devolve (custo esperado, caso, árvore, solução), sem depender do Streamlit.
+    """
+    caso = deepcopy(disciplina)
+    caso["cdef"] = p["cdef"]
+    caso["carga"] = [p["carga"]] * len(caso["carga"])
+    caso["carga_cont"] = p["carga"]
+    escala = p["afl"] / 100
+    caso["aberturas"] = [[(prob, escala * np.asarray(afl)) for prob, afl in mes] for mes in caso["aberturas"]]
+    caso["afl_cont"] = escala * np.asarray(caso["afl_cont"])
+    for i, (vmin, vmax, vi, qmax, prod) in enumerate(p["uhes"]):
+        caso["vmin"][i], caso["vmax"][i] = vmin, vmax
+        caso["vi"][i] = vmin + vi / 100 * (vmax - vmin)
+        caso["qmax"][i], caso["prod"][i] = qmax * fator, prod / fator
+    caso["termicas"] = list(termicas)
+    caso["gtmax"] = [pmax for _, pmax, _ in p["termicas"]]
+    caso["cvu"] = [cvu for _, _, cvu in p["termicas"]]
+    ampliar_horizonte(caso, meses)
+    arv = construir_arvore(caso["aberturas"])
+    custo, resultado = resolver_arvore(caso, arv, cortes_da_continuacao(caso))
+    return custo, caso, arv, resultado

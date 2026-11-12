@@ -8,7 +8,7 @@ from formulacao_trabalhos import formulacao_semana, formulacao_arvore
 
 from analise_semana import (arquivos_de_entrada, com_e_sem_custo_futuro, impacto_da_carga, marginais, merito)
 from catalogo_dessem import carregar_catalogo
-from modelo_arvore import disciplina, quadro, fator, construir_arvore, cortes_da_continuacao, resolver_arvore, rotulo
+from modelo_arvore import disciplina, quadro, fator, construir_arvore, cortes_da_continuacao, resolver_arvore, rotulo, ampliar_horizonte, estudo_arvore
 from modelo_semana import HIDRO, demanda_semana, despachar_semana
 
 
@@ -168,12 +168,6 @@ def semana():
                            "despacho_semanal.csv", "text/csv", key="semana_csv")
 
 
-def ampliar_horizonte(caso, meses):
-    for campo in ("carga", "aberturas"):
-        ultimo = caso[campo][-1]
-        caso[campo].extend(deepcopy(ultimo) for _ in range(meses-len(caso[campo])))
-
-
 @st.cache_data(show_spinner=False)
 def arvore_quadro(meses):
     caso = deepcopy(quadro)
@@ -239,25 +233,8 @@ def parametros_arvore(usinas):
 
 @st.cache_data(max_entries=24, show_spinner="Resolvendo o PL em árvore no SCIP…")
 def resolver_pl(usinas, meses, parametros):
-    caso = deepcopy(disciplina)
-    p = parametros
-    caso["cdef"] = p["cdef"]
-    caso["carga"] = [p["carga"]] * len(caso["carga"])
-    caso["carga_cont"] = p["carga"]
-    escala = p["afl"] / 100
-    caso["aberturas"] = [[(prob, escala * np.asarray(afl)) for prob, afl in mes] for mes in caso["aberturas"]]
-    caso["afl_cont"] = escala * np.asarray(caso["afl_cont"])
-    for i, (vmin, vmax, vi, qmax, prod) in enumerate(p["uhes"]):
-        caso["vmin"][i], caso["vmax"][i] = vmin, vmax
-        caso["vi"][i] = vmin + vi / 100 * (vmax - vmin)
-        caso["qmax"][i], caso["prod"][i] = qmax * fator, prod / fator
+    custo, caso, arv, resultado = estudo_arvore(list(usinas), meses, parametros)
     nomes = list(usinas)
-    for j, (nome, pmax, cvu) in enumerate(p["termicas"]):
-        caso["gtmax"][j], caso["cvu"][j] = pmax, cvu
-    caso["termicas"] = nomes
-    ampliar_horizonte(caso, meses)
-    arv = construir_arvore(caso["aberturas"])
-    custo, resultado = resolver_arvore(caso, arv, cortes_da_continuacao(caso))
     linhas = []
     for no, b in resultado.items():
         linhas.append({"Nó": rotulo(no), "Mês": len(no), "Probabilidade": arv[no]["prob"],
