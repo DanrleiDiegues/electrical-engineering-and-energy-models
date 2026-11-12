@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "build:arquivo": "vite build --mode arquivo",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "echarts": "^5.5.1",
@@ -17,6 +18,8 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^5.4.11",
-    "vite-plugin-singlefile": "^2.0.3"
+    "vite-plugin-singlefile": "^2.0.3",
+    "vitest": "^2.1.8",
+    "jsdom": "^25.0.1"
   }
 }

@@ -66,6 +66,10 @@ export default function Semana() {
   const m = r?.meia_hora
   const resumo = r?.resumo
   const cmoMax = m ? Math.max(...m.cmo, 1) * 1.08 : 1
+  // Hooks sempre no topo, nunca dentro de condições (o React exige a mesma ordem a cada renderização).
+  const opDespacho = useMemo(() => (m ? despacho(m) : null), [r])          // eslint-disable-line
+  const opVolume = useMemo(() => (m ? volume(m, resumo.volume_inicial) : null), [r])  // eslint-disable-line
+  const opMarginais = useMemo(() => (m ? marginais(m) : null), [r])        // eslint-disable-line
 
   return (
     <div className="grade">
@@ -134,15 +138,15 @@ export default function Semana() {
 
             <div className="linha l2" >
               <Painel titulo="Despacho" tag="MW · meia hora" carregando={carregando}>
-                <Grafico opcao={useMemo(() => despacho(m), [r])} altura={330} />
+                <Grafico opcao={opDespacho} altura={330} />
               </Painel>
               <Painel titulo="Volume de Batalha" tag="hm³" carregando={carregando}>
-                <Grafico opcao={useMemo(() => volume(m, resumo.volume_inicial), [r])} altura={330} />
+                <Grafico opcao={opVolume} altura={330} />
               </Painel>
             </div>
 
             <Painel titulo="CMO e CMA ao longo da semana" carregando={carregando}>
-              <Grafico opcao={useMemo(() => marginais(m), [r])} altura={280} />
+              <Grafico opcao={opMarginais} altura={280} />
             </Painel>
 
             <div className="linha l2b">

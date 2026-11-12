@@ -27,6 +27,7 @@ export default function Arvore() {
   const setUhe = (i, campo, v) => setP(q => ({ ...q, uhes: q.uhes.map((u, j) => (j === i ? { ...u, [campo]: v } : u)) }))
   const setTer = (i, campo, v) => setP(q => ({ ...q, termicas: q.termicas.map((t, j) => (j === i ? { ...t, [campo]: v } : t)) }))
   const grafico = useMemo(() => (r ? arvoreGrafico(r.nos, uheVista) : null), [r, uheVista])
+  const opVolumes = useMemo(() => (r ? volumesFolhas(r.nos, r.uhes) : null), [r])
   const folhas = r ? r.nos.filter(n => n.folha).sort((a, b) => b.probabilidade - a.probabilidade) : []
 
   return (
@@ -89,7 +90,7 @@ export default function Arvore() {
             </Painel>
             <div className="linha l2b">
               <Painel titulo="Volume final por trajetória" tag="hm³">
-                <Grafico opcao={useMemo(() => volumesFolhas(r.nos, r.uhes), [r])} altura={300} />
+                <Grafico opcao={opVolumes} altura={300} />
               </Painel>
               <Painel titulo="Folhas mais prováveis">
                 <div className="rolagem"><table>
