@@ -12,6 +12,16 @@ Para abrir diretamente o PL Único no Cloud, use `?metodo=PL%20%C3%9Anico` na UR
 
 O [exemplo independente com leitores PySDDP](../exemplo-pysddp-pl-unico/README.md) lê arquivos públicos do próprio projeto e resolve o PL com SCIP. Seus dados não substituem automaticamente os parâmetros dos dois simuladores.
 
+## DESSEM semanal
+
+A aba **DESSEM semanal** resolve, em SCIP, o compromisso de duas unidades térmicas com Batalha ao longo de 168 horas, com despacho a cada meia hora. As unidades vêm do cadastro DESSEM lido pelo PySDDP (`dados_dessem/`). Para abrir a aba diretamente, use `?metodo=DESSEM+semanal`.
+
+Na lateral, cada unidade tem um painel com **Ton e Toff**, **mínimo e máximo de potência**, **rampas de subida e descida**, **CVU** e **custo de partida**. Os valores iniciais são os do cadastro. A potência máxima não desce abaixo das curvas de partida e parada cadastradas, e o mínimo acompanha o máximo. **Restaurar cadastro** devolve os valores originais da unidade, e a coluna **Alterado em relação ao cadastro** da tabela mostra o que foi modificado. Geração inicial, estado inicial e trajetórias de partida e parada não são editáveis.
+
+A seção **Carga da semana** mostra a carga base (média, pico e energia semanal), a carga aplicada quando o percentual difere de 100% e a folga entre o pico e a capacidade instalada (máximo das térmicas somado ao turbinamento máximo de Batalha). O perfil horário é traçado com a capacidade como referência. Um pico acima da capacidade exige déficit.
+
+O recálculo é automático por padrão. Desative-o para editar vários parâmetros e clique em **Recalcular agora**; até lá, os resultados anteriores permanecem na tela com um aviso. A seção **Resultado** traz custos (total, imediato com partidas e futuro), déficit, volume final de Batalha, partidas, energia hidrelétrica e térmica, além dos gráficos e do CSV do despacho. Valores alterados em relação ao cadastro representam hipóteses de estudo, não dados de operação.
+
 ## Horizonte e dados (PDE Didática)
 
 O padrão é **12 meses**, começando em janeiro e terminando em dezembro no horizonte anual. O controle **Número de meses** aceita de **1 a 60** na interface; o modelo aceita qualquer inteiro positivo. Para horizontes acima de 12 meses, os rótulos identificam os ciclos anuais.

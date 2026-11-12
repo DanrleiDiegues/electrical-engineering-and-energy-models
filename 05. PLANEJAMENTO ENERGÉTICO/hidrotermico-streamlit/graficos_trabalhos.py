@@ -1,3 +1,4 @@
+import numpy as np
 from streamlit_echarts import JsCode, st_echarts
 import streamlit as st
 
@@ -58,6 +59,28 @@ def graficos_semana(r, usinas):
               yAxis={"type": "value", "name": "hm³", "scale": True},
               series=[{"type":"line", "name":"Volume", "showSymbol":False, "data":pontos}])
     st_echarts(op, height="310px", key="uct_vol")
+
+
+def grafico_carga(base_mw, ajustada_mw, capacidade, chave):
+    """Perfil horário da carga da semana, com a capacidade instalada como referência."""
+    fim = len(base_mw)
+    pontos = lambda v: [[h, float(x)] for h, x in enumerate(v)] + [[fim, float(v[-1])]]
+    ajustada = not np.allclose(base_mw, ajustada_mw)
+    series = [{"name": "Carga ajustada" if ajustada else "Carga base", "type": "line", "step": "end",
+               "symbol": "none", "data": pontos(ajustada_mw), "itemStyle": {"color": "#176B87"},
+               "lineStyle": {"width": 2}, "areaStyle": {"opacity": 0.18},
+               "markLine": {"symbol": "none", "silent": True, "lineStyle": {"color": VERMELHO, "type": "dashed"},
+                            "label": {"formatter": f"Capacidade instalada · {capacidade:,.1f} MW", "position": "insideEndTop"},
+                            "data": [{"yAxis": float(capacidade)}]}}]
+    if ajustada:
+        series.insert(0, {"name": "Carga base", "type": "line", "step": "end", "symbol": "none",
+                          "data": pontos(base_mw), "itemStyle": {"color": "#839AA1"},
+                          "lineStyle": {"width": 1.5, "type": "dashed"}})
+    op = base()
+    op.update(xAxis={"type": "value", "name": "Hora", "interval": 24, "min": 0, "max": fim},
+              yAxis={"type": "value", "name": "MW", "min": 0, "max": float(max(capacidade, max(ajustada_mw), max(base_mw)) * 1.12)},
+              series=series)
+    st_echarts(op, height="300px", key=chave)
 
 
 def dados_arvore(caso, arv, sol, conversao):
