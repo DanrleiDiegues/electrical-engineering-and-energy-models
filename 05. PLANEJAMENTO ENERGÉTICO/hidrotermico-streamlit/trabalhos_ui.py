@@ -2,11 +2,11 @@ from copy import deepcopy
 
 import pandas as pd
 import streamlit as st
-from streamlit_echarts import st_echarts
+from graficos_trabalhos import despacho, graficos_semana, dados_arvore, mostrar_arvore
+from formulacao_trabalhos import formulacao_semana, formulacao_arvore
 
 from catalogo_dessem import carregar_catalogo
-from charts import base
-from modelo_arvore import disciplina, construir_arvore, cortes_da_continuacao, resolver_arvore, rotulo
+from modelo_arvore import disciplina, quadro, fator, construir_arvore, cortes_da_continuacao, resolver_arvore, rotulo
 from modelo_semana import demanda_semana, despachar_semana
 
 
@@ -28,15 +28,6 @@ def selecionar(prefixo, padroes):
     return escolhidas
 
 
-def grafico(df, eixo, colunas, chave):
-    op = base()
-    op.update(xAxis={"type": "category", "data": df[eixo].tolist()},
-              yAxis={"type": "value", "name": "MW"},
-              series=[{"type": "bar", "stack": "oferta", "name": c, "data": df[c].tolist()}
-                      for c in colunas])
-    st_echarts(options=op, height="380px", key=chave)
-
-
 @st.cache_data(max_entries=24, show_spinner="Resolvendo o compromisso térmico semanal no SCIP…")
 def resolver_semana(unidades, percentual, custo_futuro):
     return despachar_semana(unidades, demanda_semana * percentual / 100, custo_futuro)
@@ -45,6 +36,7 @@ def resolver_semana(unidades, percentual, custo_futuro):
 def semana():
     st.header("Compromisso térmico semanal")
     st.caption("Batalha e duas unidades térmicas • 168 horas • despacho a cada meia hora")
+    formulacao_semana()
     usinas = selecionar("semana", [106, 322])
     for nome, d in usinas.items():
         with st.sidebar.expander(nome):
@@ -67,14 +59,29 @@ def semana():
         return
     st.metric("Custo total (R$)", f"{r['total']:,.2f}")
     st.caption(f"SCIP · {r['status']} · gap {r['gap']:.2%}")
-    grafico(r["meia"], "hora", ["UHE", *usinas, "déficit"], "uct_ger")
+    graficos_semana(r, usinas)
     with st.expander("Despacho e estados por unidade"):
         st.dataframe(r["meia"])
         st.dataframe(r["estados"])
 
 
+def ampliar_horizonte(caso, meses):
+    for campo in ("carga", "aberturas"):
+        ultimo = caso[campo][-1]
+        caso[campo].extend(deepcopy(ultimo) for _ in range(meses-len(caso[campo])))
+
+
+@st.cache_data(show_spinner=False)
+def arvore_quadro(meses):
+    caso = deepcopy(quadro)
+    ampliar_horizonte(caso, meses)
+    arv = construir_arvore(caso["aberturas"])
+    _, sol = resolver_arvore(caso, arv, cortes_da_continuacao(caso))
+    return dados_arvore(caso, arv, sol, 1.)
+
+
 @st.cache_data(max_entries=24, show_spinner=False)
-def resolver_pl(usinas):
+def resolver_pl(usinas, meses):
     caso = deepcopy(disciplina)
     nomes = list(usinas)
     for j, (nome, d) in enumerate(usinas.items()):
@@ -83,6 +90,7 @@ def resolver_pl(usinas):
         caso["gtmax"][j] = disciplina["gtmax"][referencia] if referencia is not None else d["Pmax"]
         caso["cvu"][j] = disciplina["cvu"][referencia] if referencia is not None else d["cvu"]
     caso["termicas"] = nomes
+    ampliar_horizonte(caso, meses)
     arv = construir_arvore(caso["aberturas"])
     custo, resultado = resolver_arvore(caso, arv, cortes_da_continuacao(caso))
     linhas = []
@@ -93,18 +101,31 @@ def resolver_pl(usinas):
                        "Custo futuro (R$)": b["alpha"],
                        **{f"Volume {n} (hm³)": v for n,v in zip(caso["nomes"],b["v"])}})
     cadastro = pd.DataFrame({"Unidade": nomes, "Máx. (MW)": caso["gtmax"], "CVU (R$/MWh)": caso["cvu"]})
-    return custo, pd.DataFrame(linhas), cadastro
+    return custo, pd.DataFrame(linhas), cadastro, dados_arvore(caso, arv, resultado, fator)
 
 
 def arvore():
     st.header("PL Único em árvore de cenários")
-    st.caption("Batalha e Serra do Facão • três meses • sete nós • cortes de custo futuro nas folhas")
+    formulacao_arvore()
+    meses = st.sidebar.slider("Horizonte da árvore (meses)", 3, 6, 3, key="arvore_meses")
+    st.caption(f"{meses} meses · {2**meses-1} nós · {2**(meses-1)} trajetórias finais")
+    if meses > 3:
+        st.caption("Nos meses adicionais, cada nó repete a carga e as duas aberturas de afluência do mês 3, com 50% de probabilidade por ramo. Os cortes passam às folhas do novo horizonte.")
     usinas = selecionar("arvore", [322, 106])
-    custo, df, cadastro = resolver_pl(usinas)
+    custo, df, cadastro, raiz = resolver_pl(usinas, meses)
     st.dataframe(cadastro, hide_index=True)
     st.caption("Baliza UG 1 e Candeias UG 1 usam potência e CVU do estudo mensal do Colab. As demais unidades usam o cadastro DESSEM lido pelo PySDDP.")
     st.metric("Custo esperado (R$)", f"{custo:,.2f}")
-    grafico(df, "Nó", [*disciplina["nomes"], *usinas, "Déficit"], "arvore_ger")
+    st.subheader("Árvores de cenários")
+    caso_real, caso_quadro = st.tabs(["Batalha e Serra do Facão", "Exemplo do quadro"])
+    with caso_real:
+        st.caption("Em cada nó, os valores aparecem na ordem Batalha / Serra do Facão. AFL é a afluência local em m³/s e VF é o volume final em hm³. Arraste ou use o zoom para explorar.")
+        mostrar_arvore(raiz, meses, "arv_real")
+    with caso_quadro:
+        st.caption("Caso didático do Colab com uma UHE e duas térmicas de referência. AFL é dada em hm³ por estágio e VF em hm³. Os seletores de térmicas se aplicam ao caso Batalha e Serra do Facão.")
+        mostrar_arvore(arvore_quadro(meses), meses, "arv_quadro")
+    st.subheader("Atendimento à carga por nó")
+    despacho(df, "Nó", [*disciplina["nomes"], *usinas, "Déficit"], "arvore_ger")
     st.dataframe(df, hide_index=True)
 
 
