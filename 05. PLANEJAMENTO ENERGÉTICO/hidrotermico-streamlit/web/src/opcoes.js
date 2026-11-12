@@ -1,5 +1,5 @@
 // Configurações dos gráficos (ECharts). Cada função recebe os dados da API e devolve um objeto de opções.
-export const COR = { agua: '#5ec4ff', termicas: ['#ff8a3d', '#ffc247', '#ff5e7a', '#c084fc'], perigo: '#ff4d5e', carga: '#ffffff', texto: 'rgba(255,255,255,.72)', grade: 'rgba(255,255,255,.09)' }
+export const COR = { agua: '#4f8df0', termicas: ['#ff8a3d', '#ffc247', '#ff5e7a', '#c084fc'], perigo: '#ff4d5e', carga: '#14283a', texto: 'rgba(20,40,58,.75)', grade: 'rgba(20,50,80,.1)' }
 
 const eixoDias = {
   type: 'value', min: 0, max: 168, interval: 24, axisLabel: { color: COR.texto, formatter: v => (v >= 168 ? '' : `Dia ${v / 24 + 1}`) },
@@ -13,7 +13,7 @@ const base = {
   backgroundColor: 'transparent', textStyle: { color: COR.texto },
   grid: { left: 54, right: 24, top: 42, bottom: 30 },
   legend: { top: 0, textStyle: { color: COR.texto }, icon: 'roundRect', itemHeight: 8 },
-  tooltip: { trigger: 'axis', backgroundColor: 'rgba(7,20,32,.92)', borderColor: 'rgba(255,255,255,.2)', textStyle: { color: '#fff' } },
+  tooltip: { trigger: 'axis', backgroundColor: 'rgba(255,255,255,.96)', borderColor: 'rgba(20,50,80,.2)', textStyle: { color: '#14283a' } },
 }
 const par = (x, y) => x.map((h, i) => [h, y[i]])
 export const rotuloHora = h => `Dia ${Math.floor(h / 24) + 1} · ${String(Math.floor(h % 24)).padStart(2, '0')}:${h % 1 ? '30' : '00'}`
@@ -57,7 +57,7 @@ export function volume(meia, vi) {
     tooltip: { ...base.tooltip, formatter: dica(v => v.toFixed(1) + ' hm³') },
     xAxis: eixoDias, yAxis: eixoY('hm³', { scale: true }),
     series: [{ name: 'Volume de Batalha', type: 'line', showSymbol: false, color: COR.agua, lineStyle: { width: 2 }, areaStyle: { opacity: .18 }, data: par(meia.hora, meia.volume),
-      markLine: { symbol: 'none', silent: true, lineStyle: { color: 'rgba(255,255,255,.4)', type: 'dashed' }, label: { color: COR.texto, formatter: 'início' }, data: [{ yAxis: vi }] } }],
+      markLine: { symbol: 'none', silent: true, lineStyle: { color: 'rgba(20,50,80,.45)', type: 'dashed' }, label: { color: COR.texto, formatter: 'início' }, data: [{ yAxis: vi }] } }],
   }
 }
 
@@ -71,8 +71,8 @@ export function arvoreGrafico(nos, uhe = 0) {
     no.value = no.volume_final[uhe]
     if (no.folha) {
       no.symbolSize = 15
-      no.itemStyle = { color: COR.termicas[0], borderColor: '#fff', borderWidth: 2, shadowBlur: 14, shadowColor: COR.termicas[0] }
-      no.label = { position: 'right', distance: 10, color: '#ffe7d1', backgroundColor: 'rgba(255,138,61,.22)', borderColor: 'rgba(255,138,61,.6)', borderWidth: 1, borderRadius: 6, padding: [3, 7], fontSize: 12, fontWeight: 600,
+      no.itemStyle = { color: COR.termicas[0], borderColor: '#fff', borderWidth: 2, shadowBlur: 8, shadowColor: COR.termicas[0] }
+      no.label = { position: 'right', distance: 10, color: '#7c2d0a', backgroundColor: 'rgba(255,138,61,.2)', borderColor: 'rgba(255,138,61,.65)', borderWidth: 1, borderRadius: 6, padding: [3, 7], fontSize: 12, fontWeight: 600,
         formatter: () => `${no.id}  ·  ${(no.probabilidade * 100).toFixed(1)}%  ·  ${no.volume_final[uhe].toFixed(0)} hm³` }
     }
     no.children.forEach(pinta)
@@ -83,12 +83,12 @@ export function arvoreGrafico(nos, uhe = 0) {
     altura: Math.max(440, folhas * 42),
     opcao: {
       backgroundColor: 'transparent', textStyle: { color: COR.texto },
-      tooltip: { backgroundColor: 'rgba(7,20,32,.92)', borderColor: 'rgba(255,255,255,.2)', textStyle: { color: '#fff' },
+      tooltip: { backgroundColor: 'rgba(255,255,255,.96)', borderColor: 'rgba(20,50,80,.2)', textStyle: { color: '#14283a' },
         formatter: p => { const n = p.data; return `<b>Mês ${n.mes} · ${n.id}</b><br/>Probabilidade: ${(n.probabilidade * 100).toFixed(2)}%<br/>Afluência: ${n.afluencia_m3s.map(v => v.toFixed(0)).join(' / ')} m³/s<br/>Volume final: ${n.volume_final.map(v => v.toFixed(1)).join(' / ')} hm³<br/>Déficit: ${n.deficit.toFixed(1)} MW` } },
       series: [{ type: 'tree', data: [raiz], orient: 'LR', left: 40, right: 270, top: 20, bottom: 20, roam: true, initialTreeDepth: -1, expandAndCollapse: false,
-        symbolSize: 9, itemStyle: { color: COR.agua, borderColor: 'rgba(255,255,255,.7)' }, edgeShape: 'polyline',
-        lineStyle: { color: 'rgba(94,196,255,.45)', width: 1.6 },
-        label: { color: '#fff', fontSize: 11, position: 'top', distance: 6, formatter: p => `M${p.data.mes}` } }],
+        symbolSize: 9, itemStyle: { color: COR.agua, borderColor: '#fff' }, edgeShape: 'polyline',
+        lineStyle: { color: 'rgba(79,141,240,.55)', width: 1.6 },
+        label: { color: '#14283a', fontSize: 11, position: 'top', distance: 6, formatter: p => `M${p.data.mes}` } }],
     },
   }
 }

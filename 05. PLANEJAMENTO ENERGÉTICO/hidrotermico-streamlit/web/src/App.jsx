@@ -24,8 +24,8 @@ export default function App() {
       <main className="app">
         <header className="topo">
           <div className="marca">
-            <svg width="38" height="38" viewBox="0 0 40 40" fill="none" stroke="#5ec4ff" strokeWidth="2.2" strokeLinecap="round"><path d="M6 24c5-6 9 6 14 0s9 6 14 0" /><path d="M6 31c5-6 9 6 14 0s9 6 14 0" opacity=".6" /><path d="M20 4v13M14 9l6 8 6-8" stroke="#ff8a3d" /></svg>
-            <div>Hidrolux<small>Planejamento hidrotérmico · UFJF</small></div>
+            <svg width="38" height="38" viewBox="0 0 40 40" fill="none" stroke="#4f8df0" strokeWidth="2.2" strokeLinecap="round"><path d="M6 24c5-6 9 6 14 0s9 6 14 0" /><path d="M6 31c5-6 9 6 14 0s9 6 14 0" opacity=".6" /><path d="M20 4v13M14 9l6 8 6-8" stroke="#ff8a3d" /></svg>
+            <div>Planejamento Energético<small>Hidrotérmico · UFJF</small></div>
           </div>
           <div className="abas">
             <button className={aba === 'semana' ? 'ativa' : ''} onClick={() => ir('semana')}>DESSEM semanal</button>

@@ -1,4 +1,4 @@
-# Interface React (Hidrolux)
+# Interface React (Planejamento Energético)
 
 Interface em React (Vite + ECharts) que consome a API Python da pasta `../api`.
 A matemática continua toda em Python; o React só desenha e envia parâmetros.
@@ -30,5 +30,5 @@ Em desenvolvimento, `http://localhost:5173/?demo` faz o mesmo.
 | `src/Semana.jsx` | aba DESSEM semanal: controles, KPIs, medidores, gráficos, mérito, impacto |
 | `src/Arvore.jsx` | aba PL em árvore: parâmetros, árvore, folhas |
 | `src/opcoes.js` | configuração de todos os gráficos (ECharts) |
-| `src/componentes/Cenario.jsx` | paisagem hidrotérmica de fundo (SVG) |
+| `src/componentes/Cenario.jsx` e `src/estilo.css` | imagem de fundo (`public/fundo.jpg` ou a URL da Acciona) |
 | `src/estilo.css` | tema de vidro, cores e layout |

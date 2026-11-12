@@ -13,18 +13,18 @@ export default function Medidor({ valor, max, rotulo, unidade, cor, tamanho = 17
   return (
     <div className="medidor">
       <svg width={tamanho} height={tamanho * 0.9} viewBox={`0 0 ${tamanho} ${tamanho * 0.95}`}>
-        <circle cx={c} cy={c} r={c - 2} fill="rgba(6,20,32,.55)" stroke="rgba(255,255,255,.12)" />
+        <circle cx={c} cy={c} r={c - 2} fill="rgba(255,255,255,.7)" stroke="rgba(20,50,80,.12)" />
         {marcas.map((a, i) => {
           const [x1, y1] = [c + (r + 8) * Math.cos((a * Math.PI) / 180), c + (r + 8) * Math.sin((a * Math.PI) / 180)]
           const [x2, y2] = [c + (r + (i % 5 ? 4 : 1)) * Math.cos((a * Math.PI) / 180), c + (r + (i % 5 ? 4 : 1)) * Math.sin((a * Math.PI) / 180)]
-          return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,.28)" strokeWidth="1" />
+          return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(20,50,80,.3)" strokeWidth="1" />
         })}
-        <path d={arco(inicio, inicio + varredura)} stroke="rgba(255,255,255,.12)" strokeWidth="9" fill="none" strokeLinecap="round" />
-        {frac > 0.003 && <path d={arco(inicio, inicio + varredura * frac)} stroke={cor} strokeWidth="9" fill="none" strokeLinecap="round" style={{ filter: `drop-shadow(0 0 6px ${cor})` }} />}
-        <text x={c} y={c + 2} textAnchor="middle" fill="#fff" fontSize={tamanho * 0.17} fontWeight="600" className="num">
+        <path d={arco(inicio, inicio + varredura)} stroke="rgba(20,50,80,.12)" strokeWidth="9" fill="none" strokeLinecap="round" />
+        {frac > 0.003 && <path d={arco(inicio, inicio + varredura * frac)} stroke={cor} strokeWidth="9" fill="none" strokeLinecap="round" style={{ filter: `drop-shadow(0 1px 3px ${cor})` }} />}
+        <text x={c} y={c + 2} textAnchor="middle" fill="#14283a" fontSize={tamanho * 0.17} fontWeight="600" className="num">
           {Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
         </text>
-        <text x={c} y={c + tamanho * 0.15} textAnchor="middle" fill="rgba(255,255,255,.6)" fontSize="11">{unidade}</text>
+        <text x={c} y={c + tamanho * 0.15} textAnchor="middle" fill="rgba(20,40,58,.6)" fontSize="11">{unidade}</text>
       </svg>
       <div className="legenda">{rotulo}</div>
     </div>
