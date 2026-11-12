@@ -39,7 +39,7 @@ st.markdown('<div class="eyebrow">LABORATÓRIO DE PLANEJAMENTO ENERGÉTICO</div>
 st.title("Simulador - Planejamento Energético")
 st.markdown('<div class="intro">Planejamento hidrotérmico · Batalha → Serra do Facão<br>Explore o efeito das entradas sobre a geração, o armazenamento e o custo de operação.</div>', unsafe_allow_html=True)
 
-pde, plu = st.tabs(['PDE Didática', 'PL Único'], key='metodo', on_change='rerun', bind='query-params')
+pde, plu, uct, arv = st.tabs(['PDE Didática', 'PL Único', 'DESSEM semanal', 'PL Único em árvore'], key='metodo', on_change='rerun', bind='query-params')
 if pde.open:
     with pde:
         runpy.run_path(str(Path(__file__).with_name('pde_app.py')), run_name='__main__')
@@ -47,3 +47,11 @@ if plu.open:
     with plu:
         from pl_ui import mostrar_pl
         mostrar_pl()
+if uct.open:
+    with uct:
+        from trabalhos_ui import semana
+        semana()
+if arv.open:
+    with arv:
+        from trabalhos_ui import arvore
+        arvore()
