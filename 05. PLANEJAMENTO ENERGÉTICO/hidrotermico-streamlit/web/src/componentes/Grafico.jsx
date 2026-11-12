@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react'
 import * as echarts from 'echarts/core'
-import { LineChart, BarChart, TreeChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkLineComponent } from 'echarts/components'
+import { LineChart, BarChart, TreeChart, HeatmapChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkLineComponent, VisualMapComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 
-echarts.use([LineChart, BarChart, TreeChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkLineComponent, CanvasRenderer])
+echarts.use([LineChart, BarChart, TreeChart, HeatmapChart, VisualMapComponent, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkLineComponent, CanvasRenderer])
 
 // Envolve um gráfico ECharts: recebe `opcao` (objeto de configuração) e redesenha quando ela muda.
 export default function Grafico({ opcao, altura = 300 }) {

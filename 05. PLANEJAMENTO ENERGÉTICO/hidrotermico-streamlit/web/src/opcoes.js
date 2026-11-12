@@ -104,3 +104,51 @@ export function volumesFolhas(nos, nomes) {
     series: nomes.map((n, i) => ({ name: n, type: 'bar', color: i ? COR.termicas[1] : COR.agua, data: folhas.map(f => +f.volume_final[i].toFixed(1)), barMaxWidth: 16, itemStyle: { borderRadius: [4, 4, 0, 0] } })),
   }
 }
+
+// ---------- PDE Didática e PL Único (gráficos por mês) ----------
+const eixoMes = meses => ({ type: 'category', data: meses, axisLabel: { color: COR.texto, formatter: v => (v === 'Inicial' ? v : v.includes('ciclo') ? v.slice(0, 3) + '/' + v.split(' ').pop() : meses.length > 6 ? v.slice(0, 3) : v) }, axisLine: { lineStyle: { color: COR.grade } } })
+const CORES_GERACAO = [COR.agua, '#8fb8ff', COR.termicas[0], COR.termicas[1], COR.perigo, '#c084fc']
+
+// nomes: séries empilhadas (UHEs, térmicas, déficit); dados[i][mes]; carga: linha tracejada
+export function geracaoMensal(meses, nomes, dados, carga) {
+  return {
+    ...base, tooltip: { ...base.tooltip, valueFormatter: v => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' MW' },
+    xAxis: eixoMes(meses), yAxis: eixoY('MW médios', { min: 0, max: Math.max(1, Math.max(...carga) * 1.15) }),
+    series: [
+      ...nomes.map((n, i) => ({ name: n, type: 'bar', stack: 'g', barMaxWidth: 60, color: CORES_GERACAO[i % 6], data: dados[i], itemStyle: { opacity: .88 } })),
+      { name: 'Carga', type: 'line', symbol: 'none', data: carga, lineStyle: { color: COR.carga, type: 'dashed', width: 2 }, color: COR.carga },
+    ],
+  }
+}
+
+export function armazenamentoMensal(meses, series) {
+  return {
+    ...base, tooltip: { ...base.tooltip, valueFormatter: v => v.toFixed(1) + ' %' },
+    xAxis: { ...eixoMes(['Inicial', ...meses]), boundaryGap: false }, yAxis: eixoY('Volume útil (%)', { min: 0, max: 100 }),
+    series: series.map((s, i) => ({ name: s.nome, type: 'line', symbolSize: 7, color: s.cor || [COR.agua, COR.termicas[0]][i % 2], lineStyle: { width: 3, type: s.tracejada ? 'dashed' : 'solid' }, data: s.dados })),
+  }
+}
+
+export function custosMensais(meses, series, nomeY = 'Custo imediato (R$ milhões)') {
+  return {
+    ...base, tooltip: { ...base.tooltip, valueFormatter: v => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) },
+    xAxis: eixoMes(meses), yAxis: eixoY(nomeY),
+    series: series.map((s, i) => ({ name: s.nome, type: 'bar', barMaxWidth: 50, color: [COR.agua, COR.termicas[0]][i % 2], data: s.dados, itemStyle: { borderRadius: [4, 4, 0, 0] } })),
+  }
+}
+
+// Mapa de calor do custo futuro: z[i][j], i = % útil de Batalha (x), j = % útil de Serra (y), em R$ milhões
+export function custoFuturo(niveis, z) {
+  const rot = niveis.map(v => v.toFixed(0))
+  const todos = z.flat(), min = Math.min(...todos), max = Math.max(...todos)
+  return {
+    backgroundColor: 'transparent', textStyle: { color: COR.texto },
+    tooltip: { confine: true, backgroundColor: 'rgba(255,255,255,.96)', borderColor: 'rgba(20,50,80,.2)', textStyle: { color: '#14283a' },
+      formatter: p => `Batalha: ${rot[p.data[0]]}% útil<br/>Serra: ${rot[p.data[1]]}% útil<br/>Custo: <b>R$ ${Number(p.data[2]).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi</b>` },
+    grid: { top: 20, left: 70, right: 30, bottom: 100 },
+    xAxis: { type: 'category', data: rot, name: 'VI Batalha (% útil)', nameLocation: 'middle', nameGap: 30, axisLabel: { color: COR.texto } },
+    yAxis: { type: 'category', data: rot, name: 'VI Serra (% útil)', nameLocation: 'middle', nameGap: 45, axisLabel: { color: COR.texto } },
+    visualMap: { min, max: max > min ? max : min + 1, calculable: true, orient: 'horizontal', left: 'center', bottom: 0, text: ['Maior custo', 'Menor custo'], textStyle: { color: COR.texto }, inRange: { color: ['#e3f4f1', '#7cc7d3', '#4f8df0', '#1f3f7a'] } },
+    series: [{ type: 'heatmap', data: z.flatMap((linha, i) => linha.map((v, j) => [i, j, v])), emphasis: { itemStyle: { borderColor: '#14283a', borderWidth: 1 } } }],
+  }
+}

@@ -48,3 +48,60 @@ class PedidoArvore(BaseModel):
     afl: float = Field(100, gt=0, description="Escala das afluências (%)")
     uhes: list[ParametrosUHE] | None = Field(None, description="Batalha e Serra do Facão, nessa ordem. Omitido = padrão")
     termicas: list[ParametrosTermica] | None = Field(None, description="Omitido = Baliza UG 1 e Candeias UG 1 com dados do estudo")
+
+
+# ---------- PL Único determinístico ----------
+class UhePL(BaseModel):
+    nome: str | None = None
+    vmin: float = Field(ge=0, description="Volume mínimo (hm³)")
+    vmax: float = Field(gt=0, description="Volume máximo (hm³)")
+    engol: float = Field(ge=0, description="Engolimento (m³/s)")
+    prod: float = Field(ge=0, description="Produtibilidade (MW por m³/s)")
+
+
+class UtePL(BaseModel):
+    nome: str | None = None
+    capac: float = Field(ge=0, description="Potência máxima (MW)")
+    custo: float = Field(ge=0, description="Custo (R$/MWh)")
+
+
+class PedidoPL(BaseModel):
+    inicio: int = Field(8, ge=0, le=11, description="Mês inicial (0 = janeiro)")
+    afl_b: list[float] = Field(min_length=1, max_length=60, description="Afluência local de Batalha por mês (m³/s)")
+    afl_s: list[float] = Field(min_length=1, max_length=60, description="Afluência local de Serra por mês (m³/s)")
+    carga: list[float] = Field(min_length=1, max_length=60, description="Carga por mês (MW médios)")
+    vi: list[float] = Field(min_length=2, max_length=2, description="Armazenamento inicial (% do volume útil)")
+    cdef: float = Field(4000., ge=0)
+    potencia_serra: float = Field(212.58, ge=0)
+    uhes: list[UhePL] = Field(min_length=2, max_length=2)
+    termicas: list[UtePL] = Field(min_length=2, max_length=2)
+
+
+# ---------- PDE Didática ----------
+class UhePDE(BaseModel):
+    nome: str | None = None
+    vmin: float
+    vmax: float
+    engolimento: float = Field(description="m³/s")
+    produtividade: float = Field(description="MW por m³/s")
+
+
+class TermicaPDE(BaseModel):
+    nome: str | None = None
+    gtmax: float = Field(ge=0, description="MW")
+    custo: float = Field(ge=0, description="R$/MWh")
+
+
+class PedidoPDE(BaseModel):
+    n_meses: int = Field(12, ge=1, le=60)
+    carga: float = Field(250., ge=0)
+    cargas_mensais: list[float] | None = Field(None, description="Carga mês a mês; omitido = carga constante")
+    nr_disc: int = Field(24, ge=2, le=40, description="Níveis de volume por UHE")
+    inicial: list[float] = Field(min_length=2, max_length=2, description="% útil inicial")
+    trajetoria: list[int] = Field(description="0 = afluência máxima, 1 = mínima, por mês")
+    afl_max: list[list[float]] = Field(description="[Batalha, Serra] máximas por mês (m³/s)")
+    afl_min: list[list[float]] = Field(description="[Batalha, Serra] mínimas por mês (m³/s)")
+    uhes: list[UhePDE] = Field(min_length=2, max_length=2)
+    termicas: list[TermicaPDE] = Field(min_length=2, max_length=2)
+    custo_deficit: float = Field(4000., ge=0)
+    potencia_serra: float = Field(212.58, ge=0)

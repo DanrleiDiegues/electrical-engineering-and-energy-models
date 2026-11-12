@@ -27,6 +27,8 @@ Em desenvolvimento, `http://localhost:5173/?demo` faz o mesmo.
 | Arquivo | Conteúdo |
 |---|---|
 | `src/api.js` | chamadas HTTP à API |
+| `src/PDE.jsx` | aba PDE Didática: grade de volumes, operação, custos futuros, exportação |
+| `src/PL.jsx` | aba PL Único: entradas mensais, operação, resultados |
 | `src/Semana.jsx` | aba DESSEM semanal: controles, KPIs, medidores, gráficos, mérito, impacto |
 | `src/Arvore.jsx` | aba PL em árvore: parâmetros, árvore, folhas |
 | `src/opcoes.js` | configuração de todos os gráficos (ECharts) |

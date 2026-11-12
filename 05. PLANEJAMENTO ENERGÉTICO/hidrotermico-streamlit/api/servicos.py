@@ -18,14 +18,14 @@ class ErroDeEntrada(ValueError):
     """Entrada inválida (nome de usina desconhecido, etc.)."""
 
 
-def _limpa(x):
+def limpa(x):
     """Converte numpy/NaN para tipos que o JSON aceita."""
     if isinstance(x, dict):
-        return {str(k): _limpa(v) for k, v in x.items()}
+        return {str(k): limpa(v) for k, v in x.items()}
     if isinstance(x, (list, tuple)):
-        return [_limpa(v) for v in x]
+        return [limpa(v) for v in x]
     if isinstance(x, np.ndarray):
-        return _limpa(x.tolist())
+        return limpa(x.tolist())
     if isinstance(x, (np.integer,)):
         return int(x)
     if isinstance(x, (float, np.floating)):
@@ -89,7 +89,7 @@ def calcular_semana(escolhas, percentual_carga=100., custo_futuro=True, hora_imp
         real = impacto_carga(unidades, carga, custo_futuro, hora_impacto, delta_impacto) - r["total"]
         saida["impacto"] = {"hora": hora_impacto, "delta_mw": delta_impacto, "previsto": previsto,
                             "real": real, "diferenca": real - previsto}
-    return _limpa(saida)
+    return limpa(saida)
 
 
 # ---------- PL Único em árvore ----------
@@ -102,7 +102,7 @@ def padroes_arvore():
         uhes.append(dict(vmin=disciplina["vmin"][i], vmax=disciplina["vmax"][i],
                          vi=round(100 * (disciplina["vi"][i] - disciplina["vmin"][i]) / util, 1),
                          qmax=round(disciplina["qmax"][i] / fator, 2), prod=round(disciplina["prod"][i] * fator, 6)))
-    return _limpa({"carga": 250., "cdef": 4000., "afl": 100., "nomes_uhe": disciplina["nomes"], "uhes": uhes,
+    return limpa({"carga": 250., "cdef": 4000., "afl": 100., "nomes_uhe": disciplina["nomes"], "uhes": uhes,
                    "termicas": _termicas_padrao()})
 
 
@@ -133,5 +133,5 @@ def calcular_arvore(meses=3, carga=None, cdef=None, afl=100., uhes=None, termica
                     "volume_final": list(b["v"]), "geracao_uhe": list(caso["prod"] * b["q"]),
                     "geracao_termica": list(b["g"]), "deficit": b["d"],
                     "custo_imediato": b["ci"], "custo_futuro": b["alpha"], "folha": not any(arv[o]["pai"] == no for o in arv)})
-    return _limpa({"custo_esperado": custo, "meses": meses, "uhes": caso["nomes"],
+    return limpa({"custo_esperado": custo, "meses": meses, "uhes": caso["nomes"],
                    "termicas": [t["nome"] for t in termicas], "nos": nos})

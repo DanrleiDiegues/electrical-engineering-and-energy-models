@@ -122,3 +122,22 @@ th:first-child, td:first-child { text-align: left; }
 .vazio { padding: 40px; text-align: center; color: var(--suave); }
 .carregando { position: relative; }
 .carregando::after { content: "Resolvendo no SCIP…"; position: absolute; inset: 0; display: grid; place-items: center; background: rgba(255, 255, 255, .6); border-radius: 20px; backdrop-filter: blur(3px); font-weight: 500; }
+
+/* ---------- tabelas editáveis, sub-abas e progresso ---------- */
+table.editavel input { width: 74px; padding: 5px 7px; border-radius: 8px; border: 1px solid rgba(20, 50, 80, .15); background: rgba(255, 255, 255, .8); text-align: right; }
+table.editavel input:disabled { opacity: .5; background: rgba(20, 50, 80, .06); }
+table.editavel th { font-size: 11.5px; white-space: nowrap; }
+.subabas { display: flex; gap: 4px; flex-wrap: wrap; padding: 4px; border-radius: 14px; background: var(--vidro); border: 1px solid var(--borda); backdrop-filter: blur(18px); width: fit-content; max-width: 100%; }
+.subabas button { border: 0; background: transparent; padding: 8px 16px; border-radius: 10px; cursor: pointer; color: var(--suave); }
+.subabas button.ativa { background: var(--agua-2); color: #fff; font-weight: 600; }
+.trilho.grande { height: 14px; border-radius: 99px; background: rgba(20, 50, 80, .12); overflow: hidden; }
+.trilho.grande .preench { height: 100%; border-radius: 99px; transition: width .4s; }
+.seg { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: rgba(20, 50, 80, .08); margin-bottom: 12px; }
+.seg button { flex: 1; border: 0; padding: 7px 8px; border-radius: 8px; background: transparent; cursor: pointer; font-size: 12.5px; color: var(--suave); }
+.seg button.ativa { background: #fff; color: var(--texto); font-weight: 600; box-shadow: 0 1px 4px rgba(20, 50, 80, .15); }
+h4 { margin: 14px 0 6px; font-size: 13px; color: var(--suave); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+.chips button { border: 0; border-radius: 8px; padding: 5px 8px; font-size: 11.5px; cursor: pointer; color: var(--texto); }
+.chips .max { background: rgba(79, 141, 240, .22); } .chips .min { background: rgba(255, 138, 61, .3); }
+code { background: rgba(20, 50, 80, .08); padding: 2px 6px; border-radius: 6px; font-size: 12.5px; }
+ul.texto-longo { padding-left: 18px; } ul.texto-longo li { margin-bottom: 6px; }

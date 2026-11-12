@@ -50,3 +50,51 @@ def test_arvore_igual_ao_streamlit():
     assert len(d["nos"]) == 7 and sum(n["folha"] for n in d["nos"]) == 4
     d8 = cliente.post("/arvore", json={"meses": 8, "carga": 300}).json()
     assert len(d8["nos"]) == 255 and sum(n["folha"] for n in d8["nos"]) == 128
+
+
+def test_pl_unico_igual_ao_modelo():
+    from pl_model import pl_unico_det, sistema_colab
+    padroes = cliente.get("/pl/padroes").json()
+    r = cliente.post("/pl", json=padroes)
+    assert r.status_code == 200
+    d = r.json()
+    colab = sistema_colab()
+    colab["UHE"][1]["Potencia"] = 212.58      # potência nominal de Serra; cenário 1 = afluências mínimas do Colab (20, 25, 30 e 24, 29, 20 m³/s)
+    assert d["resumo"]["custo_total"] == pytest.approx(pl_unico_det(colab, 1)["custo_total"], rel=1e-6)
+    assert d["meses"] == ["Setembro", "Outubro", "Novembro"] and len(d["armazenamento"][0]) == 4
+    padroes["carga"] = [250.] * 2
+    assert cliente.post("/pl", json=padroes).status_code == 422     # meses incoerentes
+    anual = cliente.get("/pl/padroes", params={"perfil": "anual"}).json()
+    assert len(cliente.post("/pl", json=anual).json()["linhas"]) == 12
+
+
+def _aguarda(tarefa):
+    import time
+    for _ in range(300):
+        t = cliente.get(f"/pde/{tarefa}").json()
+        if t["estado"] in ("pronto", "erro"):
+            return t
+        time.sleep(0.1)
+    raise AssertionError("PDE não terminou")
+
+
+def test_pde_igual_ao_modelo():
+    from model import Parameters, planejamento, avaliar
+    pedido = cliente.get("/pde/padroes", params={"n_meses": 2}).json()
+    pedido["nr_disc"] = 4
+    t = _aguarda(cliente.post("/pde", json=pedido).json()["id"])
+    assert t["estado"] == "pronto", t["erro"]
+    d = t["resultado"]
+    p = Parameters(n_meses=2, nr_disc=4)
+    _, estados, curvas = planejamento(p.policy_parameters())
+    direto = avaliar(p, estados, curvas)
+    assert d["resumo"]["custo_planejado"] == pytest.approx(sum(x["ci"] for x in direto["planejada"]), rel=1e-6)
+    assert len(d["futuro"]) == 2 and len(d["futuro"][0]) == 4 and len(d["armazenamento"]["planejada"][0]) == 3
+
+
+def test_pde_entrada_invalida():
+    pedido = cliente.get("/pde/padroes", params={"n_meses": 2}).json()
+    pedido["nr_disc"] = 3
+    pedido["trajetoria"] = [0]            # tamanho errado
+    assert cliente.post("/pde", json=pedido).status_code == 422
+    assert cliente.get("/pde/naoexiste").status_code == 404

@@ -24,4 +24,23 @@ describe('interface em modo demonstração', () => {
     expect(raiz.textContent).toContain('Trajetórias finais')
     expect(raiz.textContent).toContain('Folhas mais prováveis')
   })
+
+  it('renderiza PL Único e PDE Didática, com o cálculo em segundo plano simulado', async () => {
+    const App = (await import('../src/App.jsx')).default
+    const raiz = document.createElement('div'); document.body.appendChild(raiz)
+    await act(async () => { createRoot(raiz).render(<App />) })
+    const aba = nome => [...raiz.querySelectorAll('.abas button')].find(b => b.textContent === nome)
+    await act(async () => { aba('PL Único').click() })
+    await ate(raiz, 'Custo total · PL Único')
+    expect(raiz.textContent).toContain('Atendimento à carga')
+    await act(async () => { [...raiz.querySelectorAll('.subabas button')].find(b => b.textContent.includes('Resultados')).click() })
+    expect(raiz.textContent).toContain('Baixar resultados (.csv)')
+    await act(async () => { aba('PDE Didática').click() })
+    await ate(raiz, 'Calcular')
+    await act(async () => { [...raiz.querySelectorAll('button')].find(b => b.textContent === 'Calcular').click() })
+    await ate(raiz, 'Esperado inicial')
+    expect(raiz.textContent).toContain('Isolados − planejado')
+    await act(async () => { [...raiz.querySelectorAll('.subabas button')].find(b => b.textContent.includes('Custos futuros')).click() })
+    expect(raiz.textContent).toContain('Custo esperado por par de volumes iniciais')
+  })
 })
