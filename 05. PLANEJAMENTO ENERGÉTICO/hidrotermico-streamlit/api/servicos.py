@@ -102,18 +102,24 @@ def padroes_arvore():
         uhes.append(dict(vmin=disciplina["vmin"][i], vmax=disciplina["vmax"][i],
                          vi=round(100 * (disciplina["vi"][i] - disciplina["vmin"][i]) / util, 1),
                          qmax=round(disciplina["qmax"][i] / fator, 2), prod=round(disciplina["prod"][i] * fator, 6)))
-    return _limpa({"carga": 250., "cdef": 4000., "afl": 100., "nomes_uhe": disciplina["nomes"], "uhes": uhes})
+    return _limpa({"carga": 250., "cdef": 4000., "afl": 100., "nomes_uhe": disciplina["nomes"], "uhes": uhes,
+                   "termicas": _termicas_padrao()})
+
+
+def _termicas_padrao():
+    """Baliza UG 1 e Candeias UG 1, com potência e CVU do estudo mensal."""
+    cat = carregar_catalogo()
+    termicas = []
+    for i, nome in enumerate(["BBF BALIZA · UG 1", "ERB CANDEIAS · UG 1"]):
+        if nome not in cat:
+            raise ErroDeEntrada(f"Térmica padrão ausente do catálogo: {nome}")
+        termicas.append(dict(nome=nome, pmax=float(disciplina["gtmax"][i]), cvu=float(disciplina["cvu"][i])))
+    return termicas
 
 
 def calcular_arvore(meses=3, carga=None, cdef=None, afl=100., uhes=None, termicas=None):
     padrao = padroes_arvore()
-    if termicas is None:   # Baliza UG 1 e Candeias UG 1, com potência e CVU do estudo mensal
-        cat = carregar_catalogo()
-        termicas = []
-        for i, nome in enumerate(["BBF BALIZA · UG 1", "ERB CANDEIAS · UG 1"]):
-            if nome not in cat:
-                raise ErroDeEntrada(f"Térmica padrão ausente do catálogo: {nome}")
-            termicas.append(dict(nome=nome, pmax=float(disciplina["gtmax"][i]), cvu=float(disciplina["cvu"][i])))
+    termicas = termicas or _termicas_padrao()
     uhes = uhes or padrao["uhes"]
     p = dict(carga=padrao["carga"] if carga is None else carga, cdef=padrao["cdef"] if cdef is None else cdef, afl=afl,
              uhes=[(u["vmin"], u["vmax"], u["vi"], u["qmax"], u["prod"]) for u in uhes],

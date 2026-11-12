@@ -1,0 +1,1 @@
+{"carga":250.0,"cdef":4000.0,"afl":100.0,"nomes_uhe":["Batalha","Serra do Facão"],"uhes":[{"vmin":430.049988,"vmax":1781.609985,"vi":39.7,"qmax":147.02,"prod":0.329412},{"vmin":1752.0,"vmax":5199.0,"vi":50.2,"qmax":313.0,"prod":0.6157}],"termicas":[{"nome":"BBF BALIZA · UG 1","pmax":10.0,"cvu":882.76},{"nome":"ERB CANDEIAS · UG 1","pmax":17.0,"cvu":118.93}]}
