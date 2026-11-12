@@ -9,7 +9,7 @@ def formulacao_semana():
         st.markdown("**2. Compromisso e permanência.** Uma partida muda o estado para ligado. Um desligamento muda o estado para desligado. As somas contam os eventos recentes que ainda obrigam a unidade a permanecer nesse estado.")
         st.latex(r"u_{ih}-u_{i,h-1}=y_{ih}-w_{ih},\quad \sum_{j=h-T_i^{on}+1}^{h}y_{ij}\le u_{ih},\quad \sum_{j=h-T_i^{off}+1}^{h}w_{ij}\le 1-u_{ih}")
         st.markdown("Os somatórios começam, no mínimo, na primeira hora do estudo. O modelo lê o estado inicial, a potência inicial e o tempo já cumprido nesse estado. Impede novos eventos cujas obrigações ultrapassariam a última hora.")
-        with st.expander("Entenda o ponto 2 · partida, desligamento e tempos mínimos"):
+        if st.toggle("Entenda o ponto 2 · partida, desligamento e tempos mínimos", key="uct_detalhar_permanencia"):
             st.markdown("Para uma unidade $i$, **estado** indica se ela está ligada na hora $h$. **Evento** indica o que mudou naquela hora. As três variáveis são binárias.")
             st.markdown("| Variável | Quando vale 1 |\n|---|---|\n| $u_{ih}$ | A unidade está ligada. |\n| $y_{ih}$ | A unidade inicia uma partida. |\n| $w_{ih}$ | A unidade passa ao estado desligado. |")
             st.markdown("**Primeira equação — mudança de estado.** Se a unidade estava desligada às 7h e inicia a partida às 8h, o estado muda de 0 para 1. Nessa hora, $y=1$ e $w=0$. Às 9h, se continuar ligada, $u=1$ e $y=w=0$. Durante a partida, a potência segue a trajetória cadastrada.")
