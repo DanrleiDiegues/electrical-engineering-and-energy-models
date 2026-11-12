@@ -5,7 +5,7 @@ def formulacao_semana():
     with st.expander("Formulação matemática e metodologia · DESSEM semanal"):
         st.markdown("**1. Decisões.** O SCIP resolve um modelo linear inteiro misto. Para cada térmica $i$ e hora $h$, as variáveis binárias $u$, $y$ e $w$ indicam unidade ligada, início de partida e desligamento. A potência $P_{ik}$ é contínua em cada meia hora $k$, de duração $\\Delta=0{,}5$ h.")
         st.latex(r"\min\ \sum_k\left[\Delta\left(\sum_i c_iP_{ik}+c_D D_k\right)+0{,}01\,\kappa S_k\right]+\sum_{i,h}K_i y_{ih}+\alpha")
-        st.markdown("**Objetivo em R$.** $c_i$ é o custo variável da térmica e $c_D$ a penalidade do déficit, ambos em R$/MWh. $D_k$ é a carga não atendida em MW, $K_i$ o custo de partida em R$ e $S_k$ a vazão vertida em m³/s. O coeficiente 0,01 penaliza cada hm³ vertido. O termo $\\alpha$ representa o custo futuro ao fim da semana.")
+        st.markdown("**Objetivo em reais.** $c_i$ é o custo variável da térmica e $c_D$ a penalidade do déficit, ambos em reais por MWh. $D_k$ é a carga não atendida em MW, $K_i$ o custo de partida em reais e $S_k$ a vazão vertida em m³/s. O coeficiente 0,01 penaliza cada hm³ vertido. O termo $\\alpha$ representa o custo futuro ao fim da semana.")
         st.markdown("**2. Compromisso e permanência.** Uma partida muda o estado para ligado. Um desligamento muda o estado para desligado. As somas contam os eventos recentes que ainda obrigam a unidade a permanecer nesse estado.")
         st.latex(r"u_{ih}-u_{i,h-1}=y_{ih}-w_{ih},\quad \sum_{j=h-T_i^{on}+1}^{h}y_{ij}\le u_{ih},\quad \sum_{j=h-T_i^{off}+1}^{h}w_{ij}\le 1-u_{ih}")
         st.markdown("Os somatórios começam, no mínimo, na primeira hora do estudo. O modelo lê o estado inicial, a potência inicial e o tempo já cumprido nesse estado. Impede novos eventos cujas obrigações ultrapassariam a última hora.")
@@ -16,7 +16,7 @@ def formulacao_semana():
         st.latex(r"V_k=V_{k-1}+\kappa(A-Q_k-S_k),\qquad \rho Q_k+\sum_i P_{ik}+D_k=L_{h(k)}")
         st.markdown("O volume $V$ está em hm³. A afluência $A$, a vazão turbinada $Q$ e a vertida $S$ estão em m³/s. O fator $\\kappa=0{,}0018$ converte uma meia hora de vazão em hm³. A produtividade $\\rho$ converte vazão turbinada em MW. A carga horária $L$ vale para as duas meias horas. O reservatório e o turbinamento respeitam os limites físicos.")
         st.latex(r"\alpha=\max\{0,\ \max_j[\lambda_j(V_j^{alvo}-V_{final})]\}")
-        st.markdown("Cada corte $j$ associa um volume-alvo a uma penalidade marginal $\\lambda_j$ em R$/hm³. Desmarcar **Aplicar custo futuro** fixa $\\alpha=0$.")
+        st.markdown("Cada corte $j$ associa um volume-alvo a uma penalidade marginal $\\lambda_j$ em reais por hm³. Desmarcar **Aplicar custo futuro** fixa $\\alpha=0$.")
 
 
 def formulacao_arvore():
