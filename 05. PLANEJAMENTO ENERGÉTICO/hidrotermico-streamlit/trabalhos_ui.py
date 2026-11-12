@@ -117,7 +117,7 @@ def arvore():
     st.caption("Baliza UG 1 e Candeias UG 1 usam potência e CVU do estudo mensal do Colab. As demais unidades usam o cadastro DESSEM lido pelo PySDDP.")
     st.metric("Custo esperado (R$)", f"{custo:,.2f}")
     st.subheader("Árvores de cenários")
-    caso_real, caso_quadro = st.tabs(["Batalha e Serra do Facão", "Exemplo do quadro"])
+    caso_real, caso_quadro = st.tabs(["Batalha e Serra do Facão", "Cenário Base"])
     with caso_real:
         st.caption("Em cada nó, os valores aparecem na ordem Batalha / Serra do Facão. AFL é a afluência local em m³/s e VF é o volume final em hm³. Arraste ou use o zoom para explorar.")
         mostrar_arvore(raiz, meses, "arv_real")
