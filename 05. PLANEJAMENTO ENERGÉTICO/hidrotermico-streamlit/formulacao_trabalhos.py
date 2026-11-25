@@ -25,6 +25,8 @@ def formulacao_semana():
         st.markdown("A desigualdade de variação vale entre dois intervalos consecutivos em regime normal. As rampas $R$ estão em MW/h. A primeira potência livre após a partida fica limitada ao mínimo mais uma rampa de meia hora. Antes da curva de parada, a potência deve chegar ao mínimo.")
         st.markdown("**4. Água, carga e custo terminal.** A hidrelétrica Batalha atende à carga junto com as térmicas.")
         st.latex(r"V_k=V_{k-1}+\kappa(A-Q_k-S_k),\qquad \rho Q_k+\sum_i P_{ik}+D_k=L_{h(k)}")
+        st.markdown("**Hidrelétrica flat (opcional, marcada por padrão).** Batalha turbina a mesma vazão em todas as meias horas; o valor $\\bar Q$ é escolhido pelo modelo. Desmarcar a opção remove a restrição e deixa $Q_k$ livre.")
+        st.latex(r"Q_k=\bar Q,\qquad 0\le \bar Q\le Q^{max}")
         st.markdown("O volume $V$ está em hm³. A afluência $A$, a vazão turbinada $Q$ e a vertida $S$ estão em m³/s. O fator $\\kappa=0{,}0018$ converte uma meia hora de vazão em hm³. A produtividade $\\rho$ converte vazão turbinada em MW. A carga horária $L$ vale para as duas meias horas. O reservatório e o turbinamento respeitam os limites físicos.")
         st.latex(r"\alpha=\max\{0,\ \max_j[\lambda_j(V_j^{alvo}-V_{final})]\}")
         st.markdown("Cada corte $j$ associa um volume-alvo a uma penalidade marginal $\\lambda_j$ em reais por hm³. Desmarcar **Aplicar custo futuro** fixa $\\alpha=0$.")

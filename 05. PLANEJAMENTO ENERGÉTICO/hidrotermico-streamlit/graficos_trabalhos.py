@@ -148,7 +148,7 @@ def grafico_volumes(casos, chave):
 def dados_arvore(caso, arv, sol, conversao):
     nos = {}
     for n, r in arv.items():
-        afl = " / ".join(f"{v/conversao:g}" for v in r["afl"])
+        afl = " / ".join(f"{v/conversao:.4g}" for v in r["afl"])
         vf = " / ".join(f"{v:.1f}" for v in sol[n]["v"])
         nos[n] = {"name": rotulo(n), "mes":len(n), "prob":f"{100*r['prob']:g}%",
                   "afl":afl, "vf":vf, "children":[]}

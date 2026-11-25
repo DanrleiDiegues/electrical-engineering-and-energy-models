@@ -56,9 +56,10 @@ def bloco_fisico(m,c,vi,afl,carga,nome):
     for i in nh:
         recebida=quicksum(q[j]+s[j] for j in c["mont"][i])
         bh.append(m.addCons(v[i]+q[i]+s[i]-recebida == vi[i]+afl[i]))
-    m.addCons(quicksum(c["prod"][i]*q[i] for i in nh)+quicksum(g)+d == carga)
+    atendimento=m.addCons(quicksum(c["prod"][i]*q[i] for i in nh)+quicksum(g)+d == carga)
     ci=c["horas"]*(quicksum(custo*x for custo,x in zip(c["cvu"],g))+c["cdef"]*d)+.01*quicksum(s)
-    return dict(v=v,q=q,s=s,g=g,d=d,ci=ci,bh=bh)
+    # bh (balanços hídricos) e atendimento ficam disponíveis para ler os duais (CMA e CMO).
+    return dict(v=v,q=q,s=s,g=g,d=d,ci=ci,bh=bh,atendimento=atendimento)
 
 def cortes_da_continuacao(c):
     # Um mês adicional conhecido representa a continuação didática. Cada dual dá um plano de suporte.
@@ -123,7 +124,29 @@ def ampliar_horizonte(caso, meses):
         caso[campo].extend(deepcopy(ultimo) for _ in range(meses-len(caso[campo])))
 
 
-def estudo_arvore(termicas, meses, p):
+def caso_pysddp(mes_inicial=9, meses=8):
+    """Caso da árvore montado AO VIVO pelo PySDDP: cadastro do HIDR.DAT e aberturas tiradas do VAZOES.DAT.
+
+    Mês 1: média histórica do mês inicial. Meses seguintes: duas aberturas equiprováveis (média dos anos secos
+    e dos úmidos daquele mês do calendário). O corte terminal usa a média histórica do mês seguinte ao horizonte.
+    """
+    import dados_pysddp as dp
+    usinas = list(dp.cadastro_uhes().values())
+    caso = deepcopy(disciplina)
+    caso["vmin"] = np.array([u["vmin"] for u in usinas])
+    caso["vmax"] = np.array([u["vmax"] for u in usinas])
+    caso["vi"] = caso["vmin"] + np.array([.397, .502]) * (caso["vmax"] - caso["vmin"])
+    caso["prod"] = np.array([u["prod"] for u in usinas]) / fator
+    # O limite de potência da usina vira teto de turbinamento: q ≤ min(engolimento, Pmax/ρ).
+    caso["qmax"] = np.array([min(u["qmax"], u["potencia"] / u["prod"]) for u in usinas]) * fator
+    caso["aberturas"] = [[(pr, fator * afl) for pr, afl in mes] for mes in dp.aberturas_historicas(mes_inicial, meses)]
+    caso["carga"] = [caso["carga"][0]] * meses
+    _, locais = dp.historico_local()
+    caso["afl_cont"] = fator * locais[:, (mes_inicial - 1 + meses) % 12, :].mean(axis=0)
+    return caso
+
+
+def estudo_arvore(termicas, meses, p, base=None):
     """Resolve o PL único em árvore de Batalha e Serra do Facão com os parâmetros `p`.
 
     termicas: nomes das térmicas, na mesma ordem de p["termicas"].
@@ -131,7 +154,9 @@ def estudo_arvore(termicas, meses, p):
        uhes (lista de tuplas vmin, vmax, vi %, qmax, prod) e termicas (lista de tuplas nome, pmax, cvu).
     Devolve (custo esperado, caso, árvore, solução), sem depender do Streamlit.
     """
-    caso = deepcopy(disciplina)
+    caso = deepcopy(disciplina if base is None else base)
+    # Uma base com mais meses que o pedido é cortada; uma com menos é estendida repetindo o último mês.
+    caso["carga"], caso["aberturas"] = caso["carga"][:meses], caso["aberturas"][:meses]
     caso["cdef"] = p["cdef"]
     caso["carga"] = [p["carga"]] * len(caso["carga"])
     caso["carga_cont"] = p["carga"]

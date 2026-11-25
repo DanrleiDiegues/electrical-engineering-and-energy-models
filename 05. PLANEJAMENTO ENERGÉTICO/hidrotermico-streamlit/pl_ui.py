@@ -92,6 +92,8 @@ def mostrar_pl():
     versao = st.session_state.get('pl_editor_version', 0)
     sufixo = f'_v{versao}' if versao else ''
     st.subheader('PL Único · planejamento determinístico')
+    from metodologia import mostrar_algoritmo
+    mostrar_algoritmo(st, '3.')
     st.caption('Mesma formulação do Colab, resolvida com SCIP. O exemplo de três meses reproduz suas entradas; o perfil anual usa afluências demonstrativas editáveis.')
     linhas = deepcopy(st.session_state.get('pl_saved_monthly', []))
     if not linhas:

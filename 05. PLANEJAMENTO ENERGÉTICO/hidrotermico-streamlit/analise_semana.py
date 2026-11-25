@@ -75,7 +75,7 @@ def marginais(r):
 
 
 def merito(r, entradas):
-    usinas, _, custo_futuro = entradas
+    usinas, _, custo_futuro, _ = entradas
     if "cma_mwh" not in r["meia"]:
         return
     st.subheader("Por que a térmica entra antes da água?")
@@ -89,12 +89,12 @@ def merito(r, entradas):
 
 
 @st.cache_data(max_entries=48, show_spinner="Reotimizando com a carga acrescida…")
-def reotimizar(unidades, percentual, custo_futuro, hora, delta):
-    return impacto_carga(unidades, demanda_semana * percentual / 100, custo_futuro, hora, delta)
+def reotimizar(unidades, percentual, custo_futuro, hora, delta, hidro_flat=True):
+    return impacto_carga(unidades, demanda_semana * percentual / 100, custo_futuro, hora, delta, hidro_flat)
 
 
 def impacto_da_carga(r, entradas):
-    usinas, percentual, custo_futuro = entradas
+    usinas, percentual, custo_futuro, hidro_flat = entradas
     meia = r["meia"]
     if "cmo" not in meia:
         return
@@ -106,7 +106,7 @@ def impacto_da_carga(r, entradas):
     delta = c2.number_input("Acréscimo de carga (MW)", min_value=0.5, max_value=50.0, value=1.0, step=0.5, key="semana_imp_delta")
     previsto = delta * 0.5 * (meia.cmo[2 * hora] + meia.cmo[2 * hora + 1])
     try:
-        real = reotimizar(usinas, percentual, custo_futuro, hora, delta) - r["total"]
+        real = reotimizar(usinas, percentual, custo_futuro, hora, delta, hidro_flat) - r["total"]
     except RuntimeError as exc:
         st.warning(f"Não foi possível reotimizar com a carga acrescida: {exc}")
         return
@@ -135,13 +135,13 @@ def indicadores(r, nomes):
 
 
 def com_e_sem_custo_futuro(r, entradas, resolver, nomes):
-    usinas, percentual, custo_futuro = entradas
+    usinas, percentual, custo_futuro, hidro_flat = entradas
     atual, outro = ("Com custo futuro", "Sem custo futuro") if custo_futuro else ("Sem custo futuro", "Com custo futuro")
     st.subheader("Efeito do custo futuro")
     if not st.toggle(f"Comparar com o caso \"{outro.lower()}\"", key="semana_comparar"):
         return
     try:
-        alternativo = resolver(usinas, percentual, not custo_futuro)
+        alternativo = resolver(usinas, percentual, not custo_futuro, hidro_flat)
     except RuntimeError as exc:
         st.warning(f"Não foi possível resolver o caso alternativo: {exc}")
         return
@@ -151,3 +151,23 @@ def com_e_sem_custo_futuro(r, entradas, resolver, nomes):
     st.caption("O custo futuro dá valor à água que fica no reservatório no fim da semana. Sem ele, o modelo gasta água livremente "
                "e deixa de comprar geração térmica; o custo total cai porque o benefício de guardar água para a semana seguinte "
                "deixa de ser contabilizado.")
+
+
+def com_e_sem_hidro_flat(r, entradas, resolver, nomes):
+    usinas, percentual, custo_futuro, hidro_flat = entradas
+    atual, outro = ("Hidro flat", "Hidro livre") if hidro_flat else ("Hidro livre", "Hidro flat")
+    st.subheader("Efeito da hidrelétrica flat")
+    if not st.toggle(f"Comparar com o caso \"{outro.lower()}\"", key="semana_comparar_flat"):
+        return
+    try:
+        alternativo = resolver(usinas, percentual, custo_futuro, not hidro_flat)
+    except RuntimeError as exc:
+        st.warning(f"Não foi possível resolver o caso alternativo: {exc}")
+        return
+    a, b = indicadores(r, nomes), indicadores(alternativo, nomes)
+    st.dataframe(pd.DataFrame({atual: a, outro: {k: b.get(k, "—") for k in a}}))
+    grafico_volumes([(atual, r), (outro, alternativo)], "uct_vol_flat")
+    st.caption("Com a hidro flat, Batalha gera a mesma potência a semana inteira e as térmicas e o déficit absorvem a variação "
+               "da carga. Com a hidro livre, o modelo concentra a água nas horas de térmica cara, por isso o custo cai: a "
+               "diferença de custo é o preço de impor a operação constante.")
+

@@ -19,6 +19,11 @@ def metricas(app):
     return {m.label: m.value for m in app.metric}
 
 
+def cadastro_df(app):
+    """Tabela do cadastro das unidades (a aba também mostra outras tabelas, como a do caso flat)."""
+    return next(d.value for d in app.dataframe if "Alterado em relação ao cadastro" in d.value.columns)
+
+
 def chave(app, campo, posicao=0):
     return [x.key for x in app.number_input if x.key.endswith(f"_{campo}")][posicao]
 
@@ -34,7 +39,7 @@ def test_semana_mostra_carga_base_parametros_e_resultados():
     for campo in ("Pmin", "Pmax", "subida", "descida", "cvu", "partida"):
         assert len([x for x in app.number_input if x.key.endswith(f"_{campo}")]) == 2
     assert len([s for s in app.slider if s.key.endswith(("_Ton", "_Toff"))]) == 4
-    assert app.dataframe[0].value["Alterado em relação ao cadastro"].tolist() == ["—", "—"]
+    assert cadastro_df(app)["Alterado em relação ao cadastro"].tolist() == ["—", "—"]
     assert any("Carga base: média" in c.value for c in app.sidebar.caption)
 
 
@@ -55,12 +60,12 @@ def test_parametro_alterado_e_marcado_e_restaurado():
     custo = app.session_state["semana_resultado"]["total"]
     app.number_input(key=cvu).set_value(padrao + 100).run()
     assert not app.exception
-    assert app.dataframe[0].value["Alterado em relação ao cadastro"].tolist()[0] == "CVU"
+    assert cadastro_df(app)["Alterado em relação ao cadastro"].tolist()[0] == "CVU"
     assert app.session_state["semana_resultado"]["total"] != custo
     next(b for b in app.button if b.key.endswith("_restaurar")).click().run()
     assert app.number_input(key=cvu).value == padrao
     assert app.session_state["semana_resultado"]["total"] == pytest.approx(custo)
-    assert app.dataframe[0].value["Alterado em relação ao cadastro"].tolist()[0] == "—"
+    assert cadastro_df(app)["Alterado em relação ao cadastro"].tolist()[0] == "—"
 
 
 def test_pmin_acompanha_pmax_e_pmax_respeita_trajetorias():
@@ -123,6 +128,6 @@ def test_arvore_oito_meses_e_parametros():
     base = metricas(app)["Custo esperado (R$)"]
     app.slider(key="arvore_meses").set_value(8).run()
     assert not app.exception
-    app.number_input(key="arvore_p_carga").set_value(300.).run()
+    app.number_input(key="arvore_p_pysddp_carga").set_value(300.).run()
     assert not app.exception
     assert metricas(app)["Custo esperado (R$)"] != base

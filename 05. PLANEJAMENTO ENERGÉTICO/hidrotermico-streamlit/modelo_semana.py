@@ -1,7 +1,11 @@
 import numpy as np
 import pandas as pd
 from pyscipopt import Model, quicksum, SCIP_PARAMSETTING
-HIDRO = {"Vmin":430.049988, "Vmax":1781.609985, "Qmax":147.02, "rho":0.009025*(37.70-1.20)}
+from dados_pysddp import cadastro_uhes
+
+# Batalha lida ao vivo do HIDR.DAT pelo PySDDP (volumes, engolimento das máquinas e produtibilidade).
+_batalha = cadastro_uhes()["Batalha"]
+HIDRO = {"Vmin": _batalha["vmin"], "Vmax": _batalha["vmax"], "Qmax": _batalha["qmax"], "rho": _batalha["prod"]}
 HIDRO["VI"] = HIDRO["Vmin"]+0.397*(HIDRO["Vmax"]-HIDRO["Vmin"])
 AFLUENCIA = 70.0  # m³/s, afluência constante de estudo
 CDEF = 4000.0  # R$/MWh
@@ -13,8 +17,11 @@ demanda_semana = np.tile(perfil_dia,7) + np.repeat([0,1,0,2,0,-5,-7],24)
 from math import ceil
 from copy import deepcopy
 
-def despachar_semana(unidades, demanda, usar_fcf=True, limite_s=120, fixos=None):
-    """Resolve o compromisso semanal. Com `fixos`, resolve o LP com estados e eventos fixos e devolve os duais (CMO e CMA)."""
+def despachar_semana(unidades, demanda, usar_fcf=True, limite_s=120, fixos=None, hidro_flat=True):
+    """Resolve o compromisso semanal. Com `fixos`, resolve o LP com estados e eventos fixos e devolve os duais (CMO e CMA).
+
+    `hidro_flat=True` obriga Batalha a turbinar a mesma vazão em todas as meias horas (geração hidrelétrica constante);
+    o modelo ainda escolhe qual é esse valor. Com `False`, a vazão é livre entre 0 e Qmax a cada meia hora."""
     horas = range(len(demanda))
     passos = range(2*len(demanda))
     dt, fator = 0.5, 0.0018  # meia hora e hm³ por m³/s a cada meia hora
@@ -86,18 +93,40 @@ def despachar_semana(unidades, demanda, usar_fcf=True, limite_s=120, fixos=None)
             if fim%2==0 and fim//2<len(demanda):
                 m.addCons(g<=d["Pmin"]+d["Pmax"]*(1-desligar[nome,fim//2]))
     vol, vazao, vert, deficit, cons_agua, cons_carga = {}, {}, {}, {}, {}, {}
+
+    # [FLAT] Opção didática: uma única vazão q̄ para a semana inteira (geração hidrelétrica constante).
+    q_flat = m.addVar(lb=0, ub=HIDRO["Qmax"]) if hidro_flat else None
+
     for k in passos:
         vol[k]=m.addVar(lb=HIDRO["Vmin"],ub=HIDRO["Vmax"])
+
+        # [POR QUE NÃO É FLAT — 1] Uma vazão turbinada INDEPENDENTE por meia hora, só limitada a [0, Qmax].
+        # Não há rampa da hidro nem restrição ligando Q_k a Q_{k−1}: o modelo pode subir e descer a vazão à vontade.
         vazao[k]=m.addVar(lb=0,ub=HIDRO["Qmax"])
         vert[k]=m.addVar(lb=0)
         deficit[k]=m.addVar(lb=0)
         vi=vol[k-1] if k else HIDRO["VI"]
+
+        # [POR QUE NÃO É FLAT — 2] O único elo entre as meias horas é o VOLUME. Turbinar 1 m³/s agora ou
+        # daqui a 10 horas tira a mesma água do reservatório: para o balanço hídrico, o horário é indiferente.
         cons_agua[k]=m.addCons(vol[k]==vi+fator*(AFLUENCIA-vazao[k]-vert[k]))
+
+        # [POR QUE NÃO É FLAT — 3] A carga precisa fechar em CADA meia hora. Como as térmicas têm rampa,
+        # Ton/Toff e trajetórias de partida, a hidro (sem nenhuma dessas restrições) absorve a variação da carga.
         cons_carga[k]=m.addCons(HIDRO["rho"]*vazao[k]+quicksum(p[n,k] for n in unidades)+deficit[k]==demanda[k//2])
+        if hidro_flat:
+            # [FLAT] Esta é a única linha que obriga a hidro a ficar constante.
+            m.addCons(vazao[k]==q_flat)
+
+    # [POR QUE NÃO É FLAT — 4] O custo futuro olha só o volume do FIM da semana (vol[último passo]).
+    # Ele diz QUANTA água vale guardar, não QUANDO usar a água: por isso desligar o custo futuro não deixa a hidro flat.
     futuro=m.addVar(lb=0,ub=None if usar_fcf else 0)
     if usar_fcf:
         for alvo, valor in CORTES:
             m.addCons(futuro>=valor*(alvo-vol[passos[-1]]))
+
+    # [POR QUE NÃO É FLAT — 5] A água não tem custo direto: o objetivo só cobra térmica, déficit e vertimento.
+    # O solver então coloca a água nas meias horas em que ela EVITA a térmica mais cara (pico) — e a hidro segue a carga.
     imediato=quicksum(dt*(quicksum(d["cvu"]*p[n,k] for n,d in unidades.items())+CDEF*deficit[k])
                       +0.01*fator*vert[k] for k in passos)
     partida=quicksum(d["partida"]*ligar[n,h] for n,d in unidades.items() for h in horas)
@@ -131,7 +160,7 @@ def despachar_semana(unidades, demanda, usar_fcf=True, limite_s=120, fixos=None)
     finally:
         m.freeProb()
     try:
-        lp = despachar_semana(unidades, demanda, usar_fcf, limite_s, fixos=fixados)
+        lp = despachar_semana(unidades, demanda, usar_fcf, limite_s, fixos=fixados, hidro_flat=hidro_flat)
         meia = resultado["meia"]
         meia["cmo"], meia["cma"] = lp["cmo"], lp["cma"]
         meia["cma_mwh"] = meia["cma"] / resultado["mwh_por_hm3"]
@@ -141,8 +170,8 @@ def despachar_semana(unidades, demanda, usar_fcf=True, limite_s=120, fixos=None)
     return resultado
 
 
-def impacto_carga(unidades, demanda, usar_fcf, hora, delta):
+def impacto_carga(unidades, demanda, usar_fcf, hora, delta, hidro_flat=True):
     """Variação do custo total ao somar `delta` MW à carga de uma hora, com o compromisso reotimizado."""
     nova = np.array(demanda, dtype=float)
     nova[hora] += delta
-    return despachar_semana(unidades, nova, usar_fcf)["total"]
+    return despachar_semana(unidades, nova, usar_fcf, hidro_flat=hidro_flat)["total"]
