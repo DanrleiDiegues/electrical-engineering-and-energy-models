@@ -40,16 +40,16 @@ def montar_caso(chave, p):
 
 
 @st.cache_data(max_entries=12, show_spinner=False)
-def treinar(chave, p, n_forward, max_iter, semente, n_sim):
+def calcular(chave, p, n_forward, max_iter, semente, n_sim):
     caso, ab, rot = montar_caso(chave, dict(p))
-    barra = st.progress(0., "Treinando a PDDE…")
+    barra = st.progress(0., "Calculando a política (construindo a FCF)…")
     # No toy, as duas primeiras iterações seguem o forward da documentação: ε = 0 e depois ε = (+1, 0, 0, 0).
     seq = [[1, 1, 1, 1], [2, 1, 1, 1]] if chave == "toy" and p.get("seq_doc") else None
     r = pm.pdde(caso, ab, n_forward=n_forward, max_iter=max_iter, semente=semente, sequencias=seq,
                 progresso=lambda h, n: barra.progress(h["iteracao"] / n, f"Iteração {h['iteracao']}/{n} · Zinf R$ {h['zinf']:,.0f}"))
     barra.empty()
 
-    # Simulação DENTRO da amostra: sequências sorteadas entre as mesmas aberturas usadas no treino.
+    # Simulação DENTRO da amostra: sequências sorteadas entre as mesmas aberturas usadas no cálculo da política.
     rng = np.random.default_rng(semente + 1)
     cen = np.array([[a[rng.integers(len(a))] for a in ab] for _ in range(n_sim)])
     custos, traj = pm.simular(caso, r["cortes"], cen)
@@ -76,7 +76,7 @@ def _barra_lateral():
                                else "Sorteadas por nós de Normal(40; 10)")
         if p["origem"] == "cobre":
             p["n_ab"] = sb.radio("Aberturas por estágio", [10, 3], key="pdde_nab_cobre",
-                                 format_func=lambda n: f"{n} ({'exemplo oficial' if n == 10 else 'configuração da aula'})")
+                                 format_func=lambda n: f"{n} ({'exemplo oficial' if n == 10 else 'configuração do trabalho de PDDE'})")
         else:
             p["n_ab"] = sb.slider("Aberturas por estágio", 2, 30, 10, key="pdde_nab_normal")
         p["semente_ab"] = sb.number_input("Semente das aberturas", 0, 9999, 42, key="pdde_sem_ab")
@@ -108,6 +108,18 @@ def _barra_lateral():
 
 def pdde_aba():
     st.header("PDDE — Programação Dinâmica Dual Estocástica")
+    estudo, passo = st.tabs(["Calcular a política (estudo)", "Passo a passo (forward e backward)"], key="pdde_sub",
+                            on_change="rerun")
+    if passo.open:
+        with passo:
+            from pdde_passos_ui import passo_a_passo
+            passo_a_passo()
+    if estudo.open:
+        with estudo:
+            _estudo()
+
+
+def _estudo():
     st.markdown("Cortes como na PDDD, mas com **incerteza**: em cada estágio as aberturas são equiprováveis e independentes do "
                 "estágio anterior. Isso permite **um** conjunto de cortes por estágio (e não por nó, como no Benders na árvore) "
                 "e um forward **amostrado**. Escolha o caso na barra lateral; *Batalha sozinha* é o nosso sistema no formato do 1dtoy.")
@@ -130,30 +142,31 @@ def pdde_aba():
         c[1].caption("Aberturas (m³/s, soma das UHEs" + (", ano histórico" if rot else "") + ")")
         c[1].dataframe(tab, hide_index=True)
 
-    # Só treina ao clicar: o 1dtoy com 128 iterações leva ~20 s. Os resultados ficam enquanto os parâmetros não mudarem.
-    chave_treino = repr((chave, sorted(p.items()), n_forward, max_iter, semente, n_sim))
-    if st.button("Treinar a PDDE", type="primary", key="pdde_rodar"):
-        st.session_state["pdde_treinado"] = chave_treino
-    if st.session_state.get("pdde_treinado") != chave_treino:
-        st.info("Ajuste o caso e clique em **Treinar a PDDE**. O 1dtoy com 128 iterações leva cerca de 20 s.")
+    # Só calcula ao clicar: o 1dtoy com 128 iterações leva ~20 s. Os resultados ficam enquanto os parâmetros não mudarem.
+    chave_calc = repr((chave, sorted(p.items()), n_forward, max_iter, semente, n_sim))
+    if st.button("Calcular a política (construir a FCF)", type="primary", key="pdde_rodar"):
+        st.session_state["pdde_calculado"] = chave_calc
+    if st.session_state.get("pdde_calculado") != chave_calc:
+        st.info("Ajuste o caso na barra lateral e clique em **Calcular a política (construir a FCF)**. "
+                "O 1dtoy com 128 iterações leva cerca de 20 s. Para ver cada forward e backward, use a aba *Passo a passo*.")
         return
-    r = treinar(chave, p, n_forward, max_iter, semente, n_sim)
+    r = calcular(chave, p, n_forward, max_iter, semente, n_sim)
     if chave == "toy":
         mostrar_toy(r)
     mostrar_resultado(r, chave)
 
 
 def mostrar_toy(r):
-    """Confere o nosso código com as contas à mão da página toy-single-reservoir do novomodelo."""
+    """Confere a PDDE UFJF com as contas à mão da página toy-single-reservoir do novomodelo."""
     h = r["historico"]
     doc = {1: 5000 / 9, 2: 16000 / 27}
     st.markdown("**Conferência com a documentação** "
                 "([toy-single-reservoir](https://modelossetoreletrico.org.br/docs/examples/toy-single-reservoir/))")
     st.dataframe(pd.DataFrame([
-        {"Item": "Zinf iteração 1", "Documentação": doc[1], "Nosso": h.zinf.iloc[0]},
-        {"Item": "Zinf iteração 2", "Documentação": doc[2], "Nosso": h.zinf.iloc[1] if len(h) > 1 else np.nan},
-        {"Item": "Ótimo esperado (17000/27)", "Documentação": 17000 / 27, "Nosso": r["otimo"]},
-        {"Item": "Zinf final", "Documentação": 17000 / 27, "Nosso": h.zinf.iloc[-1]}]).style.format(precision=2), hide_index=True)
+        {"Item": "Zinf iteração 1", "Documentação": doc[1], "PDDE UFJF": h.zinf.iloc[0]},
+        {"Item": "Zinf iteração 2", "Documentação": doc[2], "PDDE UFJF": h.zinf.iloc[1] if len(h) > 1 else np.nan},
+        {"Item": "Ótimo esperado (17000/27)", "Documentação": 17000 / 27, "PDDE UFJF": r["otimo"]},
+        {"Item": "Zinf final", "Documentação": 17000 / 27, "PDDE UFJF": h.zinf.iloc[-1]}]).style.format(precision=2), hide_index=True)
     st.caption("O corte do estágio 3 sai igual ao da página (θ ≥ 500 − 100/3·v). Nos estágios 1 e 2 os cortes podem diferir porque, "
                "com o reservatório exatamente vazio, o LP é degenerado: o dual pode ser 50 (térmica) ou 100/3 (valor da água), e os dois "
                "são subgradientes válidos. Os caminhos de Zinf mudam, mas o ótimo 17000/27 é o mesmo.")
@@ -161,6 +174,14 @@ def mostrar_toy(r):
 
 def mostrar_resultado(r, chave):
     h = r["historico"]
+    # O toy está em $ (valores ~600); os demais casos em R$ milhões.
+    esc, un = (1., "$") if chave == "toy" else (1e6, "R$ milhões")
+    st.markdown("##### Pontos críticos para ler o resultado")
+    st.info("1. **Zinf** é exato e só sobe: cada corte novo só aumenta o custo futuro estimado.  \n"
+            "2. **Zsup** é uma estimativa (média dos forwards); com poucos forwards oscila muito e não serve para parar.  \n"
+            "3. O **ótimo exato** (árvore inteira num único PL) é a linha de chegada do Zinf, quando a árvore é pequena.  \n"
+            "4. A **simulação** aqui é dentro da amostra (cenários sorteados entre as aberturas). O teste fora da amostra "
+            "está na aba COBRE × PDDE.")
     k = st.columns(4)
     k[0].metric("Zinf final (R$)", f"{h.zinf.iloc[-1]:,.2f}")
     k[1].metric("Simulação: custo médio (R$)", f"{r['custos'].mean():,.0f}",
@@ -168,24 +189,30 @@ def mostrar_resultado(r, chave):
     k[2].metric("Ótimo exato da árvore (R$)", f"{r['otimo']:,.2f}" if r["otimo"] else "—",
                 f"Zinf − ótimo: {h.zinf.iloc[-1] - r['otimo']:,.0f}" if r["otimo"] else f"{r['nos']:,} nós: grande demais",
                 delta_color="off")
-    k[3].metric("Tempo de treino", f"{r['segundos']:.1f} s", f"{int(h.cortes.iloc[-1])} cortes", delta_color="off")
+    k[3].metric("Tempo para calcular a política", f"{r['segundos']:.1f} s", f"{int(h.cortes.iloc[-1])} cortes", delta_color="off")
 
     fig = go.Figure()
-    fig.add_scatter(x=h.iteracao, y=h.zsup_sup / 1e6, line=dict(width=0), showlegend=False, hoverinfo="skip")
-    fig.add_scatter(x=h.iteracao, y=h.zsup_inf / 1e6, fill="tonexty", fillcolor="rgba(183,75,116,.15)", line=dict(width=0),
+    fig.add_scatter(x=h.iteracao, y=h.zsup_sup / esc, line=dict(width=0), showlegend=False, hoverinfo="skip")
+    fig.add_scatter(x=h.iteracao, y=h.zsup_inf / esc, fill="tonexty", fillcolor="rgba(183,75,116,.15)", line=dict(width=0),
                     name="IC95% do Zsup")
-    fig.add_scatter(x=h.iteracao, y=h.zsup / 1e6, name="Zsup (média dos forwards)", mode="lines", line_color=CORES[4])
-    fig.add_scatter(x=h.iteracao, y=h.zinf / 1e6, name="Zinf", mode="lines+markers", line_color=CORES[0])
+    fig.add_scatter(x=h.iteracao, y=h.zsup / esc, name="Zsup (média dos forwards)", mode="lines", line_color=CORES[4])
+    fig.add_scatter(x=h.iteracao, y=h.zinf / esc, name="Zinf", mode="lines+markers", line_color=CORES[0])
     if r["otimo"]:
-        fig.add_hline(y=r["otimo"] / 1e6, line_dash="dot", line_color="#41464D", annotation_text="ótimo exato")
-    st.plotly_chart(_layout(fig, "Evolução de Zinf e Zsup", "R$ milhões").update_xaxes(title="Iteração"), width="stretch",
+        fig.add_hline(y=r["otimo"] / esc, line_dash="dot", line_color="#41464D", annotation_text="ótimo exato")
+    st.plotly_chart(_layout(fig, "Evolução de Zinf e Zsup", un).update_xaxes(title="Iteração"), width="stretch",
                     key="pdde_conv")
     st.caption("Zinf é exato e cresce; Zsup é a média de poucos forwards (com 1 forward por iteração é o custo de um único cenário "
                "e não serve como limite). Por isso a parada usa a estabilização de Zinf ou um número fixo de iterações.")
 
-    a, b = st.tabs(["Despacho médio por estágio", "Cortes (função de custo futuro)"], key="pdde_res")
+    a, b = st.tabs(["Despacho médio por estágio", "Política final (FCF de cada mês)"], key="pdde_res")
     with a:
-        st.dataframe(r["estagios"].style.format(precision=2), hide_index=True)
+        e = r["estagios"]
+        fig = go.Figure()
+        for col, cor in (("Turbinado médio (m³/s)", CORES[0]), ("Térmica média (MW)", CORES[2]), ("Déficit médio (MW)", CORES[4])):
+            fig.add_bar(x=e["Estágio"], y=e[col], name=col, marker_color=cor, texttemplate="%{y:.1f}", textposition="outside")
+        st.plotly_chart(_layout(fig, "Despacho médio por estágio na simulação", "m³/s ou MW").update_layout(barmode="group"),
+                        width="stretch", key="pdde_desp")
+        st.dataframe(e.style.format(precision=2), hide_index=True)
         caso = r["caso"]
         vol = r["vol"].sum(axis=2)
         fig = go.Figure()
@@ -193,10 +220,11 @@ def mostrar_resultado(r, chave):
             fig.add_scatter(x=caso["meses"], y=np.percentile(vol, 100 - q, axis=0), line=dict(width=0), showlegend=False)
             fig.add_scatter(x=caso["meses"], y=np.percentile(vol, q, axis=0), fill="tonexty", line=dict(width=0),
                             fillcolor=f"rgba(27,107,130,{op})", name=f"P{q}–P{100 - q}")
-        fig.add_scatter(x=caso["meses"], y=vol.mean(axis=0), name="Média", line_color=CORES[0])
+        fig.add_scatter(x=caso["meses"], y=vol.mean(axis=0), name="Média", line_color=CORES[0], mode="lines+markers+text",
+                        text=[f"{v:.0f}" for v in vol.mean(axis=0)], textposition="top center")
         st.plotly_chart(_layout(fig, "Volume final armazenado (todas as UHEs)", "hm³"), width="stretch", key="pdde_vol")
-        fig = go.Figure(go.Histogram(x=r["custos"] / 1e6, nbinsx=40, marker_color=CORES[1]))
-        st.plotly_chart(_layout(fig, "Distribuição do custo total na simulação", "cenários").update_xaxes(title="R$ milhões"),
+        fig = go.Figure(go.Histogram(x=r["custos"] / esc, nbinsx=40, marker_color=CORES[1]))
+        st.plotly_chart(_layout(fig, "Distribuição do custo total na simulação", "cenários").update_xaxes(title=un),
                         width="stretch", key="pdde_hist")
     with b:
         cortes, caso = r["cortes"], r["caso"]
@@ -208,12 +236,12 @@ def mostrar_resultado(r, chave):
             x = np.linspace(u["vmin"], u["vmax"], 200)
             fig = go.Figure()
             for j, (pi, b0) in enumerate(cortes[i]):
-                fig.add_scatter(x=x, y=(b0 + pi[0] * x) / 1e6, mode="lines", line=dict(width=1, color="rgba(65,70,77,.25)"),
+                fig.add_scatter(x=x, y=(b0 + pi[0] * x) / esc, mode="lines", line=dict(width=1, color="rgba(65,70,77,.25)"),
                                 showlegend=j == 0, name="cortes")
             env = np.max([[b0 + pi[0] * xx for xx in x] for pi, b0 in cortes[i]], axis=0) if cortes[i] else 0 * x
-            fig.add_scatter(x=x, y=np.maximum(env, 0) / 1e6, name="α = max(cortes)", line=dict(color=CORES[4], width=3))
-            fig.update_yaxes(range=[0, max(1e-6, np.max(env)) / 1e6 * 1.05])
-            st.plotly_chart(_layout(fig, f"Custo futuro esperado após {t}", "α (R$ milhões)").update_xaxes(title="Volume final (hm³)"),
+            fig.add_scatter(x=x, y=np.maximum(env, 0) / esc, name="α = max(cortes)", line=dict(color=CORES[4], width=3))
+            fig.update_yaxes(range=[0, max(1e-6, np.max(env)) / esc * 1.05])
+            st.plotly_chart(_layout(fig, f"Custo futuro esperado após {t}", f"α ({un})").update_xaxes(title="Volume final (hm³)"),
                             width="stretch", key="pdde_fcf2d")
         else:
             x = np.linspace(uhes[0]["vmin"], uhes[0]["vmax"], 40)
@@ -222,9 +250,9 @@ def mostrar_resultado(r, chave):
             Z = np.zeros_like(X)
             for pi, b0 in cortes[i]:
                 Z = np.maximum(Z, b0 + pi[0] * X + pi[1] * Y)
-            fig = go.Figure(go.Surface(x=x, y=y, z=Z / 1e6, colorscale="Tealrose"))
+            fig = go.Figure(go.Surface(x=x, y=y, z=Z / esc, colorscale="Tealrose"))
             fig.update_layout(height=520, margin=dict(l=0, r=0, t=30, b=0), template="plotly_white",
                               scene=dict(xaxis_title=f"VF {uhes[0]['nome']}", yaxis_title=f"VF {uhes[1]['nome']}",
-                                         zaxis_title="α (R$ mi)"))
+                                         zaxis_title=f"α ({un})"))
             st.plotly_chart(fig, width="stretch", key="pdde_fcf3d")
         st.caption(f"{len(cortes[i])} cortes no fim de {t}. Na PDDE eles valem para qualquer cenário do estágio (independência).")

@@ -238,12 +238,13 @@ def preparar(caso):
     return caso
 
 
-def pdde(caso, aberturas, n_forward=10, max_iter=50, semente=42, progresso=None, sequencias=None):
-    """Treina a política: forward amostrado (Monte Carlo) + backward em TODAS as aberturas de cada estágio.
+def pdde(caso, aberturas, n_forward=10, max_iter=50, semente=42, progresso=None, sequencias=None, registro=None):
+    """Calcula a política (constrói a FCF): forward amostrado (Monte Carlo) + backward em TODAS as aberturas.
 
     aberturas[t]: matriz (n_aberturas, n_uhes) em m³/s, equiprováveis e independentes entre estágios.
     sequencias (opcional): índices das aberturas do forward em cada iteração, ex. [[1,1,1,1], [2,1,1,1]] para
     reproduzir à mão o exemplo da documentação; sem ela, o forward é sorteado (Monte Carlo).
+    registro (opcional): lista que recebe cada evento (forward, backward, limites) para o passo a passo didático.
     Devolve os cortes de cada estágio e o histórico de Zinf e Zsup por iteração.
     """
     caso = preparar(caso)
@@ -267,6 +268,9 @@ def pdde(caso, aberturas, n_forward=10, max_iter=50, semente=42, progresso=None,
                 # O estágio t RECEBE v (o VF do estágio t−1 nesta sequência) e usa os cortes atuais.
                 r = resolver_estagio(caso, t, v, aberturas[t][w], cortes)
                 visitados.append(v)
+                if registro is not None:
+                    registro.append(dict(tipo="forward", it=it, f=f, t=t, w=int(w), afl=np.array(aberturas[t][w], float),
+                                         vi=np.array(v, float), r=r, n_cortes=[len(c) for c in cortes]))
 
                 # Custo REALIZADO: só o imediato, descontado. Somar α contaria o futuro duas vezes.
                 custo += caso["D"][t] * r["ci"]
@@ -290,6 +294,14 @@ def pdde(caso, aberturas, n_forward=10, max_iter=50, semente=42, progresso=None,
                 if not any(np.allclose(pi, a, rtol=1e-9, atol=1e-6) and abs(b - c) <= 1e-6 * max(1., abs(b))
                            for a, c in cortes[t - 1]):
                     cortes[t - 1].append((pi, b))
+                    novo = True
+                else:
+                    novo = False
+                if registro is not None:
+                    registro.append(dict(tipo="backward", it=it, t=t, v_barra=np.array(v_barra, float),
+                                         abertas=[dict(afl=np.array(a, float), obj=r["obj"], pi=r["pi"], v=r["v"], d=r["d"])
+                                                  for a, r in zip(aberturas[t], rs)],
+                                         corte=(pi, b), novo=novo, n_cortes=[len(c) for c in cortes]))
 
         # ---------------- LIMITES ----------------
         # Zinf: valor esperado do 1º estágio (média nas suas aberturas, com o VI real). Cresce a cada iteração.
@@ -301,6 +313,9 @@ def pdde(caso, aberturas, n_forward=10, max_iter=50, semente=42, progresso=None,
         meia = 1.96 * dp_ / np.sqrt(n_forward)
         historico.append(dict(iteracao=it, zinf=zinf, zsup=media, zsup_inf=media - meia, zsup_sup=media + meia,
                               cortes=sum(len(c) for c in cortes), segundos=perf_counter() - inicio))
+        if registro is not None:
+            registro.append(dict(tipo="limites", it=it, custos=list(custos), n_cortes=[len(c) for c in cortes],
+                                 **historico[-1]))
         if progresso:
             progresso(historico[-1], max_iter)
     return dict(cortes=cortes, historico=historico, segundos=perf_counter() - inicio, caso=caso)

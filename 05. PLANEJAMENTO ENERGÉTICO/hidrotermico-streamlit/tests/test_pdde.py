@@ -64,3 +64,13 @@ def test_toy_da_documentacao():
     pi, b = r["cortes"][2][0]
     assert abs(b - 500) < 1e-6 and abs(pi[0] + 100 / 3) < 1e-6
     assert abs(pm.pdde(caso, ab, n_forward=1, max_iter=20)["historico"][-1]["zinf"] - 17000 / 27) < 1e-4
+
+
+def test_passo_a_passo_registra_o_mesmo_algoritmo():
+    # O registro não altera o resultado e tem forward, backward e limites em cada iteração.
+    caso, ab = pm.caso_toy_documentacao(), pm.aberturas_toy()
+    reg = []
+    r1 = pm.pdde(caso, ab, n_forward=1, max_iter=3, registro=reg)
+    r2 = pm.pdde(caso, ab, n_forward=1, max_iter=3)
+    assert r1["historico"][-1]["zinf"] == r2["historico"][-1]["zinf"]
+    assert [e["tipo"] for e in reg[:8]] == ["forward"] * 4 + ["backward"] * 3 + ["limites"]

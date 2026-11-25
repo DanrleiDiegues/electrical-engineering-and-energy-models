@@ -17,9 +17,9 @@ import pdde_model as pm
 
 PASTA = Path(__file__).with_name("dados_cobre")
 
-# Configurações do estudo: a do exemplo oficial e a que o professor usa em aula.
+# Configurações do estudo: a do exemplo oficial do COBRE e a do trabalho de PDDE da disciplina (3 aberturas, 10 forwards).
 CONFIGS = {"original": dict(rotulo="Exemplo oficial do 1dtoy", aberturas=10, forwards=1, iteracoes=128),
-           "professor": dict(rotulo="Configuração da aula", aberturas=3, forwards=10, iteracoes=50)}
+           "professor": dict(rotulo="Configuração do trabalho de PDDE", aberturas=3, forwards=10, iteracoes=50)}
 
 
 def resumo_cobre(config):
@@ -36,7 +36,7 @@ def teste_cobre(config):
 
 
 def aberturas_cobre(config):
-    """As aberturas (m³/s) que o COBRE sorteou: usamos AS MESMAS no nosso treino, para isolar o método."""
+    """As aberturas (m³/s) que o COBRE sorteou: usamos AS MESMAS no cálculo da política da PDDE UFJF, para isolar o método."""
     return [np.array(a, float).reshape(-1, 1) for a in resumo_cobre(config)["aberturas_m3s"]]
 
 
@@ -48,7 +48,7 @@ def cenarios_teste():
 
 
 def calcular_nosso(config, progresso=None, n_teste=None):
-    """Treina a nossa PDDE com as aberturas do COBRE e simula a política nos cenários de teste."""
+    """Calcula a política da PDDE UFJF com as aberturas do COBRE e a simula nos cenários de teste."""
     c = CONFIGS[config]
     caso = pm.caso_1dtoy()
     ab = aberturas_cobre(config)

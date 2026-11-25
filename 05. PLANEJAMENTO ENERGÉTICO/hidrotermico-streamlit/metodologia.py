@@ -388,7 +388,7 @@ BLOCOS = [
         ["Afluência", "Normal(40; 10) m³/s, ruído branco; 10 aberturas por estágio"],
         ["Penalidades", "déficit 7.500 R$/MWh; excesso 100 R$/MWh; vertimento 0,01 e turbinamento 0,05 R$/(m³/s·h)"],
         ["Desconto", "12% ao ano: β = 1,12^(−h/8.766)"],
-        ["Treino e simulação", "128 iterações, 1 forward por iteração, semente 42; 100 cenários na simulação"]]),
+        ["Cálculo da política e simulação", "128 iterações, 1 forward por iteração, semente 42; 100 cenários na simulação"]]),
     ("h2", "11.3 Teste à mão: o toy da documentação"),
     ("p", "A documentação do novomodelo (modelossetoreletrico.org.br, exemplo toy-single-reservoir) resolve à mão duas iterações de um "
           "caso ainda menor: 1 UHE de 0 a 100 com v₀ = 30, térmica sem limite a 50, carga 40, déficit 1000 e aberturas {20, 30, 40}. "
@@ -397,21 +397,23 @@ BLOCOS = [
           "(térmica) ou 100/3 (valor da água). Ambos são subgradientes válidos; muda o caminho do Zinf, não o ótimo."),
     ("h2", "11.4 Resultado da comparação"),
     ("p", "Objetivo: avaliar como o COBRE se comporta diante de uma implementação independente (a nossa PDDE), com os mesmos dados. "
-          "Usamos as **mesmas aberturas** do COBRE no treino e o **mesmo conjunto de teste** (2.000 cenários fora da amostra, semente 777) "
+          "Usamos as **mesmas aberturas** do COBRE no cálculo da política e o **mesmo conjunto de teste** (2.000 cenários fora da amostra, semente 777) "
           "na simulação, o que permite uma comparação pareada. O ótimo exato vem do equivalente determinístico da árvore de aberturas."),
-    ("tabela", ["Indicador", "Exemplo oficial (10 ab., 1 fw, 128 it.)", "Configuração da aula (3 ab., 10 fw, 50 it.)"], [
+    ("tabela", ["Indicador", "Exemplo oficial (10 ab., 1 fw, 128 it.)", "Trabalho de PDDE (3 ab., 10 fw, 50 it.)"], [
         ["Ótimo exato da árvore (R$)", "20.617.794,45", "21.888.772,13"],
         ["Zinf COBRE (R$)", "20.616.141,78", "21.888.772,13"],
         ["Zinf nossa PDDE (R$)", "20.615.372,23", "21.888.772,13"],
         ["Custo no teste, COBRE (R$)", "20.806.731", "21.411.005"],
         ["Custo no teste, nossa PDDE (R$)", "20.806.735", "21.411.005"],
         ["Diferença pareada (R$)", "+3,79 ± 3,03", "−0,003 ± 0,07"],
-        ["Tempo de treino", "0,57 s (Rust/HiGHS) × 22 s (Python/SCIP)", "0,72 s × 24 s"]]),
+        ["Tempo para calcular a política", "0,57 s (Rust/HiGHS) × 22 s (Python/SCIP)", "0,72 s × 24 s"]]),
     ("p", "As duas implementações chegam à mesma política: os volumes, o déficit e o custo por estágio coincidem; só o CMO e o valor da "
           "água diferem um pouco em cenários degenerados (há mais de um dual ótimo). O Zinf não coincide iteração a iteração porque os "
           "forwards sorteiam cenários diferentes. A diferença relevante é de **configuração**: com 3 aberturas a política custa cerca de "
-          "R$ 600 mil a mais no teste, e o Zinf (ótimo da árvore de 3 pontos) fica acima do custo real, ou seja, deixa de ser limite inferior "
-          "do problema verdadeiro. O COBRE é cerca de 40 vezes mais rápido (warm start, seleção de cortes, Rust)."),
+          "R$ 600 mil a mais no teste (IC95% ± R$ 150 mil, comparação cenário a cenário), e o ótimo da árvore de 3 pontos é R$ 1,27 mi maior "
+          "que o da árvore de 10, porque com 3 pontos o mês seco tem probabilidade 1/3. O Zinf de uma árvore pequena, portanto, não deve "
+          "ser lido como limite inferior do problema real. O COBRE resolve o mesmo número de PLs dezenas de vezes mais rápido "
+          "(Rust, HiGHS com warm start)."),
 
     ("h1", "12. Dados ao vivo com o PySDDP", "Os modelos leem os arquivos oficiais em vez de números digitados."),
     ("p", "**HIDR.DAT** (cadastro): volumes mínimo e máximo, máquinas, vazão e potência efetivas, produtibilidade específica e perdas. "
