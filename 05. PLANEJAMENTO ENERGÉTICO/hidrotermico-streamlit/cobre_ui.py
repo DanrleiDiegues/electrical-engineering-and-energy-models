@@ -120,6 +120,11 @@ def _limites(res, conv, nosso, hist):
     a.plotly_chart(_layout(fig, "Zinf por iteração (só sobe)", "R$ milhões").update_yaxes(range=[lo, nosso["otimo"] / 1e6 * 1.003])
                    .update_xaxes(title="Iteração"), width="stretch", key="cobre_conv")
     fig = go.Figure()
+    # Faixas de fundo: o custo de um cenário fica em dois patamares (sem déficit / com déficit).
+    n_it = len(conv)
+    for y0, y1, cor, nome in ((0.3, 1., "rgba(27,175,122,.10)", "sem déficit"), (10., 300., "rgba(235,104,52,.08)", "com déficit")):
+        fig.add_scatter(x=[0, n_it + 1, n_it + 1, 0, 0], y=[y0, y0, y1, y1, y0], fill="toself", fillcolor=cor, mode="lines",
+                        line=dict(width=0), name=f"faixa {nome}", hoverinfo="skip")
     fig.add_scatter(x=conv.iteration + 1, y=conv.upper_bound / 1e6, name=f"Zsup {COBRE}", mode="markers",
                     marker=dict(color=OCRE, size=6))
     fig.add_scatter(x=hist.iteracao, y=hist.zsup / 1e6, name=f"Zsup {UFJF}", mode="markers",
@@ -127,7 +132,8 @@ def _limites(res, conv, nosso, hist):
     # Em eixo log, add_hline interpretaria y como log10: a linha do ótimo vai como série comum.
     fig.add_scatter(x=[1, len(conv)], y=[nosso["otimo"] / 1e6] * 2, mode="lines", name="ótimo exato",
                     line=dict(color=CINZA, dash="dot"))
-    b.plotly_chart(_layout(fig, "Zsup por iteração (escala log)", "R$ milhões").update_yaxes(type="log", range=[-0.5, 2.5])
+    b.plotly_chart(_layout(fig, "Zsup por iteração (escala log)", "R$ milhões").update_yaxes(type="log", range=[np.log10(0.3), np.log10(300)],
+                                 tickvals=[0.5, 1, 2, 5, 10, 20, 50, 100, 200], ticktext=["0,5", "1", "2", "5", "10", "20", "50", "100", "200"])
                    .update_xaxes(title="Iteração"), width="stretch", key="cobre_zsup")
     st.info(
         "**Ponto crítico: como ler os dois gráficos.**  \n"
@@ -184,9 +190,15 @@ def _teste(d, nosso):
         "Comparando as duas políticas **no mesmo cenário**, essa variação se cancela e sobra só a diferença de política: "
         f"R\\$ {p['dif']:,.2f} ± {p['ic95']:,.2f} por cenário.")
     dif = cd.custos_por_cenario(nosso["teste"])[:p["n"]] - custos[:p["n"]]
-    fig = go.Figure(go.Histogram(x=dif, nbinsx=60, marker_color=AZUL))
-    st.plotly_chart(_layout(fig, f"Diferença de custo por cenário ({UFJF} − {COBRE})", "cenários", 280).update_xaxes(title="R$"),
-                    width="stretch", key="cobre_dif")
+    fora = np.abs(dif) > 100
+    i_max = int(np.argmax(np.abs(dif)))
+    st.dataframe(pd.DataFrame([
+        ("Até R$ 1", f"{100 * np.mean(np.abs(dif) <= 1):.1f}%"),
+        ("Até R$ 10", f"{100 * np.mean(np.abs(dif) <= 10):.1f}%"),
+        ("Acima de R$ 100", f"{int(fora.sum())} de {p['n']} (máximo R$ {abs(dif[i_max]):,.0f}, "
+                            f"{100 * abs(dif[i_max]) / custos[i_max]:.1f}% do custo daquele cenário)"),
+    ], columns=[f"Diferença por cenário ({UFJF} − {COBRE})", "Cenários"]), hide_index=True, width="stretch")
+    st.caption("As poucas diferenças maiores vêm de empates: decisões diferentes com custo quase igual nos dois códigos.")
 
     e1, e2 = cd.medias_estagio(d["teste"]), cd.medias_estagio(nosso["teste"])
     figs = [("Volume final (hm³)", "Volume final médio", "%{y:.1f}"), ("Déficit (MW)", "Déficit médio", "%{y:.2f}"),
@@ -208,12 +220,18 @@ def _configuracoes():
     o, pr = carregar("original"), carregar("professor")
     co, cp = cd.custos_por_cenario(o["teste"]), cd.custos_por_cenario(pr["teste"])
     ic = lambda x: 1.96 * x.std(ddof=1) / np.sqrt(len(x))
-    st.plotly_chart(_barras(["Zinf (ótimo da própria árvore)", "Custo no teste (mundo real)"],
-                            [o["resumo"]["zinf_final"] / 1e6, co.mean() / 1e6],
-                            [pr["resumo"]["zinf_final"] / 1e6, cp.mean() / 1e6],
-                            "COBRE com 10 aberturas (laranja) × 3 aberturas (azul)", "R$ milhões", "%{y:.2f}")
-                    .update_traces(selector=dict(name=COBRE), name="10 aberturas × 1 forward × 128 it.")
-                    .update_traces(selector=dict(name=UFJF), name="3 aberturas × 10 forwards × 50 it."),
+    no, npf = cd.custos_por_cenario(o["nosso"]["teste"]), cd.custos_por_cenario(pr["nosso"]["teste"])
+    cats = ["Zinf (ótimo da própria árvore)", "Custo no teste (mundo real)"]
+    fig = go.Figure()
+    for nome, vals, cor, padrao in (
+            ("10 aberturas · COBRE", [o["resumo"]["zinf_final"], co.mean()], "#6250d6", ""),
+            ("10 aberturas · PDDE UFJF", [o["nosso"]["historico"].zinf.iloc[-1], no.mean()], "#6250d6", "/"),
+            ("3 aberturas · COBRE", [pr["resumo"]["zinf_final"], cp.mean()], "#1baf7a", ""),
+            ("3 aberturas · PDDE UFJF", [pr["nosso"]["historico"].zinf.iloc[-1], npf.mean()], "#1baf7a", "/")):
+        fig.add_bar(x=cats, y=np.array(vals) / 1e6, name=nome, marker=dict(color=cor, pattern_shape=padrao),
+                    texttemplate="%{y:.2f}", textposition="outside")
+    st.plotly_chart(_layout(fig, "Mesmo sistema (1dtoy), mesmos dados: só muda a configuração usada para calcular a política",
+                            "R$ milhões", 360).update_layout(barmode="group", hovermode="closest").update_yaxes(range=[0, 25]),
                     width="stretch", key="cobre_cfgs")
     tab = pd.DataFrame([
         ("Aberturas × forwards × iterações", "10 × 1 × 128", "3 × 10 × 50"),
