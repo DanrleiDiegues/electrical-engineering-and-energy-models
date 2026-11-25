@@ -68,6 +68,18 @@ def formulacao():
 
 def pddd_aba():
     st.header("PDDD — Programação Dinâmica Dual Determinística")
+    estudo, passo = st.tabs(["Estudo: PL Único × PDDD", "Passo a passo (exemplo da aula)"], key="pddd_sub",
+                            on_change="rerun")
+    if passo.open:
+        with passo:
+            from pddd_passos_ui import passo_a_passo
+            passo_a_passo()
+    if estudo.open:
+        with estudo:
+            _estudo()
+
+
+def _estudo():
     formulacao()
     from metodologia import mostrar_algoritmo
     mostrar_algoritmo(st, '5.')
