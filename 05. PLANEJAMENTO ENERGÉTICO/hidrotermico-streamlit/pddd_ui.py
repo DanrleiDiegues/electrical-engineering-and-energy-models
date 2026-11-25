@@ -1,11 +1,13 @@
-"""Aba PDDD: decomposição dual com cortes, validada contra o PL Único (trajetória) e o PL em árvore."""
+"""Aba PDDD: decomposição dual com cortes numa única trajetória, validada contra o PL Único (o que o professor pediu).
+
+A versão em árvore (Benders aninhado) ficou na aba própria, benders_arvore_ui.py, como degrau antes da PDDE.
+"""
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 import dados_pysddp as dp
-from modelo_arvore import cortes_da_continuacao, disciplina, estudo_arvore, fator
 from pddd_model import caso_de_sistema, custo_futuro_superficie, pddd, tabela_saida, trajetoria
 from pl_model import pl_unico_det, sistema_colab
 
@@ -39,19 +41,6 @@ def resolver(fonte, ano, mes, n_meses, extras, carga, vi_b, vi_s, max_iter):
                 vf=[x["v"] for x in traj], ncortes=[len(r["cortes"][no]) for no in estagios],
                 nomes=caso["nomes"], termicas=caso["termicas"], meses=caso["meses"],
                 vmin=caso["vmin"], vmax=caso["vmax"])
-
-
-@st.cache_data(max_entries=8, show_spinner="Resolvendo o PL em árvore e a PDDD na mesma árvore…")
-def comparar_arvore(meses):
-    """PL Único em árvore × PDDD visitando todos os nós da mesma árvore (dados do caso da disciplina)."""
-    util = disciplina["vmax"] - disciplina["vmin"]
-    p = dict(carga=250., cdef=4000., afl=100.,
-             uhes=[(disciplina["vmin"][i], disciplina["vmax"][i], 100 * (disciplina["vi"][i] - disciplina["vmin"][i]) / util[i],
-                    disciplina["qmax"][i] / fator, disciplina["prod"][i] * fator) for i in range(2)],
-             termicas=[("BBF Baliza", 10., 882.76), ("ERB Candeias", 17., 118.93)])
-    custo, caso, arv, _ = estudo_arvore(["BBF Baliza", "ERB Candeias"], meses, p)
-    r = pddd(caso, cortes_da_continuacao(caso), arvore=arv)
-    return custo, r["zsup"], r["zinf"], r["iteracoes"], pd.DataFrame(r["historico"])
 
 
 def formulacao():
@@ -208,21 +197,3 @@ def _estudo():
     st.plotly_chart(fig, width="stretch", key="pddd_3d")
     st.caption(f"{r['ncortes'][t]} corte(s) no fim de {meses.iloc[t]}. A superfície é max(0, max dos planos): cada corte é um "
                "plano tangente ao custo futuro no volume visitado. Onde não há cortes, o custo futuro aproximado é zero.")
-
-    # ---------------- árvore ----------------
-    st.subheader("PDDD na árvore × PL Único em árvore")
-    st.caption("Com várias aberturas por mês, a mesma PDDD percorre todos os nós no forward e gera um corte médio por nó no backward "
-               "(decomposição aninhada). Com o gap fechado, o custo esperado iguala o do PL Único em árvore. Dados do caso da disciplina.")
-    m = st.slider("Meses da árvore", 3, 7, 3, key="pddd_arv_meses")
-    custo, zsup, zinf, it, hist = comparar_arvore(m)
-    c = st.columns(4)
-    c[0].metric("PL em árvore (R$)", f"{custo:,.2f}")
-    c[1].metric("PDDD na árvore · Zsup (R$)", f"{zsup:,.2f}")
-    c[2].metric("Diferença (R$)", f"{abs(zsup - custo):,.4f}")
-    c[3].metric("Iterações", it)
-    fig = go.Figure()
-    fig.add_scatter(x=hist.iteracao, y=hist.zsup / 1e6, name="Zsup", mode="lines+markers", line_color=CORES[4])
-    fig.add_scatter(x=hist.iteracao, y=hist.zinf / 1e6, name="Zinf", mode="lines+markers", line_color=CORES[0])
-    fig.add_hline(y=custo / 1e6, line_dash="dot", line_color="#41464D", annotation_text="PL em árvore")
-    st.plotly_chart(_layout(fig, "Evolução de Zinf e Zsup na árvore", "R$ milhões").update_xaxes(title="Iteração"),
-                    width="stretch", key="pddd_arv_conv")

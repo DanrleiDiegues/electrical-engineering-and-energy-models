@@ -39,7 +39,8 @@ st.markdown('<div class="eyebrow">LABORATÓRIO DE PLANEJAMENTO ENERGÉTICO</div>
 st.title("Simulador - Planejamento Energético")
 st.markdown('<div class="intro">Planejamento hidrotérmico · Batalha → Serra do Facão<br>Explore o efeito das entradas sobre a geração, o armazenamento e o custo de operação.</div>', unsafe_allow_html=True)
 
-pde, plu, uct, arv, pdd, met = st.tabs(['PDE Didática', 'PL Único', 'DESSEM semanal', 'PL Único em árvore', 'PDDD', 'Metodologia'],
+pde, plu, uct, arv, pdd, ben, pdde, cob, met = st.tabs(['PDE Didática', 'PL Único', 'DESSEM semanal', 'PL Único em árvore', 'PDDD',
+                                                       'Benders na árvore', 'PDDE', 'COBRE × PDDE (1dtoy)', 'Metodologia'],
                                       key='metodo', on_change='rerun', bind='query-params')
 if pde.open:
     with pde:
@@ -60,6 +61,18 @@ if pdd.open:
     with pdd:
         from pddd_ui import pddd_aba
         pddd_aba()
+if ben.open:
+    with ben:
+        from benders_arvore_ui import benders_arvore
+        benders_arvore()
+if pdde.open:
+    with pdde:
+        from pdde_ui import pdde_aba
+        pdde_aba()
+if cob.open:
+    with cob:
+        from cobre_ui import cobre_aba
+        cobre_aba()
 if met.open:
     with met:
         from metodologia_ui import metodologia

@@ -313,8 +313,8 @@ BLOCOS = [
           "secos e a dos úmidos daquele mês do calendário (VAZOES.DAT)."),
     ("p", "**Tamanho:** com 2 aberturas por mês há $2^T - 1$ nós; por isso o horizonte fica limitado a 8 meses."),
 
-    ("h1", "9. PDDD ampliada", "Dados de saída completos, estágios pós-horizonte, FCF em 3D e a PDDD numa árvore."),
-    ("lacunas", 'PDDD original (3 meses, dados fixos)', ['Horizonte curto com dados digitados; custo após o horizonte nulo (esvazia no fim); sem CMO, CMA nem visualização da FCF.'], ['Dados ao vivo do PySDDP, 24 meses, estágios pós-horizonte, CMO/CMA por estágio, FCF em 3D e versão em árvore que iguala o PL em árvore.', 'Trade-off: na árvore percorre todos os nós (mesmo crescimento 2ᵀ) e cada estágio extra aumenta o tempo.']),
+    ("h1", "9. PDDD ampliada", "Dados de saída completos, estágios pós-horizonte, FCF em 3D e o Benders aninhado na árvore (degrau para a PDDE)."),
+    ("lacunas", 'PDDD original (3 meses, dados fixos)', ['Horizonte curto com dados digitados; custo após o horizonte nulo (esvazia no fim); sem CMO, CMA nem visualização da FCF.'], ['Dados ao vivo do PySDDP, 24 meses, estágios pós-horizonte, CMO/CMA por estágio, FCF em 3D e, numa aba própria, o Benders aninhado na árvore, que iguala o PL em árvore.', 'Trade-off: na árvore percorre todos os nós (mesmo crescimento 2ᵀ) e cada estágio extra aumenta o tempo.']),
     ("h2", "9.1 Dados de saída do despacho"),
     ("p", "Para cada estágio: volume final, turbinado e vertido de cada UHE; geração de cada UTE; déficit; custo imediato e futuro; e os "
           "custos marginais. Os duais vêm do forward (resolvido com duais ativados):"),
@@ -326,7 +326,10 @@ BLOCOS = [
     ("h2", "9.3 Função de custo futuro em 3D"),
     ("p", "Com duas UHEs, a FCF de cada mês é uma superfície $\\alpha(VF_{Bat}, VF_{Serra}) = \\max(0, \\max \\text{ dos cortes})$. O gráfico mostra, mês a mês, "
           "os planos acumulados e o volume final escolhido."),
-    ("h2", "9.4 A mesma PDDD numa árvore (decomposição aninhada)"),
+    ("h2", "9.4 Benders aninhado na árvore (degrau entre a PDDD e a PDDE)"),
+    ("p", "A comparação pedida pelo professor é PDDD × PL Único numa **trajetória** (uma afluência por mês), e é a que fica na aba PDDD. "
+          "A versão em árvore está na aba **Benders na árvore**: não é a PDDD do trabalho, e sim o mesmo código percorrendo a árvore inteira. "
+          "Ela mostra que os cortes funcionam com incerteza, mas também que a árvore cresce como nᵀ, o problema que a PDDE resolve."),
     ("p", "Se cada mês tem várias aberturas, o forward percorre todos os nós e o backward gera, para cada nó pai, um corte médio sobre os "
           "filhos. Com o gap fechado, o custo esperado iguala o do PL Único em árvore (seção 8):"),
     ("eq", r"\alpha_n \ge \sum_{c \in \text{filhos}(n)} \frac{p_c}{p_n}\Big[Q_c(\bar v_n) + \pi_c^{\top}(VF_n - \bar v_n)\Big]", "21"),
@@ -342,7 +345,9 @@ BLOCOS = [
     ("p", "A PDDE resolve um problema computacional: a árvore completa cresce como $|\\Omega|^T$. Supondo afluências **independentes entre "
           "estágios**, cada mês tem um conjunto Ωₜ de aberturas, e um único conjunto de cortes por mês vale para qualquer nó daquele mês. "
           "No trabalho: 3 aberturas por mês, sorteadas entre os anos do VAZOES.DAT (1931 em diante) para o mês do calendário, e 10 "
-          "sequências forward por iteração. O NEWAVE usa 20 aberturas e 200 sequências."),
+          "sequências forward por iteração. O NEWAVE usa 20 aberturas e 200 sequências. O mesmo código atende três casos: o 1dtoy do COBRE, "
+          "**Batalha sozinha** (1 UHE, dados do PySDDP, no formato do 1dtoy: 4 meses, 2 térmicas, 10 aberturas, mesma folga de carga) e a "
+          "cascata Batalha + Serra do Facão."),
     ("eq", r"Q_t(v, \omega) = \min_{x \in X_t(v, a_t^{\omega})} \big\{C_t(x) + \beta_t\,\alpha_t\big\},\qquad \alpha_t \ge \bar b^\ell + \bar\pi^{\ell\top} v'", "22"),
     ("eq", r"\bar\pi = \frac{1}{|\Omega_{t+1}|}\sum_{\omega} \pi_{t+1}^{\omega},\qquad \bar b = \frac{1}{|\Omega_{t+1}|}\sum_{\omega} Q_{t+1}(\bar v, \omega) - \bar\pi^{\top}\bar v", "23"),
     ("h2", "10.2 Fluxo do código"),
@@ -366,10 +371,10 @@ BLOCOS = [
           "COBRE/ONS é arbitrário (por exemplo, um número fixo de iterações). Com uma só abertura por mês, a PDDE coincide com a PDDD e "
           "com o PL Único, o que serve de teste do código."),
     ("p", "**Cuidados:** com mudanças climáticas, sortear anos muito antigos pode perder representatividade. Cortes repetidos não "
-          "acrescentam informação e degradam o LP; o código os descarta. Implementação: apenas no Colab, por enquanto."),
+          "acrescentam informação e degradam o LP; o código os descarta. Implementação: Colab (Trabalho 5) e aba PDDE do Streamlit."),
 
     ("h1", "11. COBRE / Novo Modelo: o caso 1dtoy", "O exemplo oficial mais simples do modelo aberto do setor elétrico."),
-    ("lacunas", 'Nosso PDDE didático', ['Cada LP é reconstruído no SCIP, sem desconto, sem modelo de afluência e sem paralelismo: lento para casos reais.'], ['Novo Modelo: HiGHS com reaproveitamento de base, desconto, penalidades, entradas padronizadas e paralelismo.', 'Trade-off: muito mais complexo de entender e configurar; o 1dtoy para por número de iterações, sem prova de convergência.']),
+    ("lacunas", 'Nosso PDDE didático', ['Cada LP é reconstruído no SCIP, sem warm start, sem seleção de cortes e sem paralelismo: ~40× mais lento no 1dtoy.'], ['Novo Modelo: HiGHS com reaproveitamento de base, desconto, penalidades, entradas padronizadas e paralelismo.', 'Trade-off: muito mais complexo de entender e configurar; o 1dtoy para por número de iterações, sem prova de convergência.']),
     ("h2", "11.1 O que é"),
     ("p", "O Novo Modelo, que deve substituir NEWAVE e DECOMP, nasceu de um protótipo do ONS (o COBRE) e hoje é desenvolvido em conjunto "
           "por ONS, CCEE e EPE, com código aberto no GitHub (ons-ccee-epe/novomodelo). Ele resolve a PDDE com o solver HiGHS e lê os casos "
@@ -384,14 +389,29 @@ BLOCOS = [
         ["Penalidades", "déficit 7.500 R$/MWh; excesso 100 R$/MWh; vertimento 0,01 e turbinamento 0,05 R$/(m³/s·h)"],
         ["Desconto", "12% ao ano: β = 1,12^(−h/8.766)"],
         ["Treino e simulação", "128 iterações, 1 forward por iteração, semente 42; 100 cenários na simulação"]]),
-    ("h2", "11.3 Resultado da comparação"),
-    ("tabela", ["Execução", "Zinf após o treino (R$)"], [
-        ["novomodelo v0.22.0 (128 iterações, 1 forward)", "20.616.141,78"],
-        ["Nosso PDDE, mesmas aberturas e configuração", "20.615.372,71"],
-        ["Nosso PDDE, 150 iterações com 5 forwards", "20.617.794,94"]]),
-    ("p", "As aberturas foram extraídas da saída do novomodelo, para comparar a mesma árvore. A diferença de 0,004% vem dos sorteios do "
-          "forward (geradores aleatórios diferentes); com mais iterações o limite inferior do nosso código sobe um pouco além do valor do "
-          "COBRE, que também não tinha convergido (gap estatístico negativo no relatório)."),
+    ("h2", "11.3 Teste à mão: o toy da documentação"),
+    ("p", "A documentação do novomodelo (modelossetoreletrico.org.br, exemplo toy-single-reservoir) resolve à mão duas iterações de um "
+          "caso ainda menor: 1 UHE de 0 a 100 com v₀ = 30, térmica sem limite a 50, carga 40, déficit 1000 e aberturas {20, 30, 40}. "
+          "A nossa PDDE reproduz o ótimo 17000/27 ≈ 629,63 e o corte do estágio 3 da 1ª iteração (θ ≥ 500 − 100/3·v). Os cortes dos "
+          "estágios 1 e 2 podem sair diferentes porque, com o reservatório exatamente vazio, o LP é degenerado: o dual pode ser 50 "
+          "(térmica) ou 100/3 (valor da água). Ambos são subgradientes válidos; muda o caminho do Zinf, não o ótimo."),
+    ("h2", "11.4 Resultado da comparação"),
+    ("p", "Objetivo: avaliar como o COBRE se comporta diante de uma implementação independente (a nossa PDDE), com os mesmos dados. "
+          "Usamos as **mesmas aberturas** do COBRE no treino e o **mesmo conjunto de teste** (2.000 cenários fora da amostra, semente 777) "
+          "na simulação, o que permite uma comparação pareada. O ótimo exato vem do equivalente determinístico da árvore de aberturas."),
+    ("tabela", ["Indicador", "Exemplo oficial (10 ab., 1 fw, 128 it.)", "Configuração da aula (3 ab., 10 fw, 50 it.)"], [
+        ["Ótimo exato da árvore (R$)", "20.617.794,45", "21.888.772,13"],
+        ["Zinf COBRE (R$)", "20.616.141,78", "21.888.772,13"],
+        ["Zinf nossa PDDE (R$)", "20.615.372,23", "21.888.772,13"],
+        ["Custo no teste, COBRE (R$)", "20.806.731", "21.411.005"],
+        ["Custo no teste, nossa PDDE (R$)", "20.806.735", "21.411.005"],
+        ["Diferença pareada (R$)", "+3,79 ± 3,03", "−0,003 ± 0,07"],
+        ["Tempo de treino", "0,57 s (Rust/HiGHS) × 22 s (Python/SCIP)", "0,72 s × 24 s"]]),
+    ("p", "As duas implementações chegam à mesma política: os volumes, o déficit e o custo por estágio coincidem; só o CMO e o valor da "
+          "água diferem um pouco em cenários degenerados (há mais de um dual ótimo). O Zinf não coincide iteração a iteração porque os "
+          "forwards sorteiam cenários diferentes. A diferença relevante é de **configuração**: com 3 aberturas a política custa cerca de "
+          "R$ 600 mil a mais no teste, e o Zinf (ótimo da árvore de 3 pontos) fica acima do custo real, ou seja, deixa de ser limite inferior "
+          "do problema verdadeiro. O COBRE é cerca de 40 vezes mais rápido (warm start, seleção de cortes, Rust)."),
 
     ("h1", "12. Dados ao vivo com o PySDDP", "Os modelos leem os arquivos oficiais em vez de números digitados."),
     ("p", "**HIDR.DAT** (cadastro): volumes mínimo e máximo, máquinas, vazão e potência efetivas, produtibilidade específica e perdas. "
