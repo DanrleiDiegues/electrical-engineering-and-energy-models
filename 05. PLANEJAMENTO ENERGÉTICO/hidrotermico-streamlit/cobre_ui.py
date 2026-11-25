@@ -124,8 +124,10 @@ def _limites(res, conv, nosso, hist):
                     marker=dict(color=OCRE, size=6))
     fig.add_scatter(x=hist.iteracao, y=hist.zsup / 1e6, name=f"Zsup {UFJF}", mode="markers",
                     marker=dict(color=AZUL, size=6, symbol="diamond"))
-    fig.add_hline(y=nosso["otimo"] / 1e6, line_dash="dot", line_color=CINZA, annotation_text="ótimo exato")
-    b.plotly_chart(_layout(fig, "Zsup por iteração (escala log)", "R$ milhões").update_yaxes(type="log")
+    # Em eixo log, add_hline interpretaria y como log10: a linha do ótimo vai como série comum.
+    fig.add_scatter(x=[1, len(conv)], y=[nosso["otimo"] / 1e6] * 2, mode="lines", name="ótimo exato",
+                    line=dict(color=CINZA, dash="dot"))
+    b.plotly_chart(_layout(fig, "Zsup por iteração (escala log)", "R$ milhões").update_yaxes(type="log", range=[-0.5, 2.5])
                    .update_xaxes(title="Iteração"), width="stretch", key="cobre_zsup")
     st.info(
         "**Ponto crítico: como ler os dois gráficos.**  \n"
