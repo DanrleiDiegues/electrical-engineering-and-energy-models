@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, DEMO } from './api.js'
-import Painel, { Kpi, Campo, Numero, Chave, fmt, brl } from './componentes/Painel.jsx'
+import Painel, { Kpi, Campo, Numero, Chave, Clima, useGraficos, SeletorGraficos, fmt, brl } from './componentes/Painel.jsx'
 import Grafico from './componentes/Grafico.jsx'
 import Medidor from './componentes/Medidor.jsx'
 import { despacho, marginais, volume, COR } from './opcoes.js'
@@ -17,8 +17,10 @@ export default function Semana() {
   const [ajustes, setAjustes] = useState({})            // { nome: { campo: valor } } só do que foi alterado
   const [percentual, setPercentual] = useState(100)
   const [fcf, setFcf] = useState(true)
+  const [flat, setFlat] = useState(true)   // hidrelétrica com vazão constante na semana
   const [r, setR] = useState(null)
   const [carregando, setCarregando] = useState(false)
+  const g = useGraficos()
   const [erro, setErro] = useState(null)
   const [hora, setHora] = useState(20)
   const [delta, setDelta] = useState(1)
@@ -28,7 +30,7 @@ export default function Semana() {
 
   const pedido = (extra = {}) => ({
     unidades: escolhas.map(nome => ({ nome, ajustes: ajustes[nome] || {} })),
-    percentual_carga: percentual, custo_futuro: fcf, ...extra,
+    percentual_carga: percentual, custo_futuro: fcf, hidro_flat: flat, ...extra,
   })
 
   async function calcular(extra = {}) {
@@ -108,6 +110,7 @@ export default function Semana() {
           <input type="range" min="50" max="150" value={percentual} onChange={e => setPercentual(+e.target.value)} />
         </Campo>
         <Chave rotulo="Aplicar custo futuro" valor={fcf} onChange={setFcf} />
+        <Chave rotulo="Hidrelétrica flat (vazão constante)" valor={flat} onChange={setFlat} />
         <button className="botao laranja" disabled={carregando || !escolhas.length} onClick={() => calcular()}>
           {carregando ? 'Resolvendo…' : 'Calcular'}
         </button>
@@ -116,7 +119,7 @@ export default function Semana() {
       {/* ---------- resultados ---------- */}
       <div className="coluna">
         {erro && <div className="aviso">{erro}{DEMO ? '' : ' Verifique a API ou os parâmetros (despacho inviável com carga alta demais).'}</div>}
-        {!r && !erro && <div className="painel vazio">Resolvendo o compromisso térmico semanal…</div>}
+        {!r && !erro && <div className="painel vazio"><Clima grande texto="Resolvendo o compromisso térmico semanal…" /></div>}
         {r && (
           <>
             <div className="linha l4">
@@ -126,7 +129,9 @@ export default function Semana() {
               <Kpi rotulo="Partidas térmicas" valor={resumo.partidas} nota={`hidro ${fmt(resumo.uhe_mwh / 1000, 2)} GWh · térmica ${fmt(resumo.termica_mwh / 1000, 2)} GWh`} />
             </div>
 
-            <Painel titulo="Custo marginal da operação (CMO)" tag="R$/MWh" carregando={carregando}>
+            <SeletorGraficos g={g} lista={[['cmo', 'Medidores de CMO'], ['despacho', 'Despacho'], ['volume', 'Volume de Batalha'], ['marginais', 'CMO e CMA']]} />
+
+            {g.mostra('cmo') && <Painel titulo="Custo marginal da operação (CMO)" tag="R$/MWh" carregando={carregando}>
               <p className="sub">Custo de atender 1 MWh a mais em cada meia hora, obtido do problema linear com liga/desliga fixos. Mesma escala nos três medidores.</p>
               <div className="medidores">
                 <Medidor valor={Math.min(...m.cmo)} max={cmoMax} rotulo="Mínimo" unidade="R$/MWh" cor={COR.agua} />
@@ -134,20 +139,20 @@ export default function Semana() {
                 <Medidor valor={Math.max(...m.cmo)} max={cmoMax} rotulo="Máximo" unidade="R$/MWh" cor={COR.perigo} />
                 <Medidor valor={m.cma_mwh.reduce((a, b) => a + b, 0) / m.cma_mwh.length} max={cmoMax} rotulo="CMA médio (água)" unidade="R$/MWh" cor="#7c9cff" />
               </div>
-            </Painel>
+            </Painel>}
 
-            <div className="linha l2" >
-              <Painel titulo="Despacho" tag="MW · meia hora" carregando={carregando}>
+            {(g.mostra('despacho') || g.mostra('volume')) && <div className="linha l2" >
+              {g.mostra('despacho') && <Painel titulo="Despacho" tag="MW · meia hora" carregando={carregando}>
                 <Grafico opcao={opDespacho} altura={330} />
-              </Painel>
-              <Painel titulo="Volume de Batalha" tag="hm³" carregando={carregando}>
+              </Painel>}
+              {g.mostra('volume') && <Painel titulo="Volume de Batalha" tag="hm³" carregando={carregando}>
                 <Grafico opcao={opVolume} altura={330} />
-              </Painel>
-            </div>
+              </Painel>}
+            </div>}
 
-            <Painel titulo="CMO e CMA ao longo da semana" carregando={carregando}>
+            {g.mostra('marginais') && <Painel titulo="CMO e CMA ao longo da semana" carregando={carregando}>
               <Grafico opcao={opMarginais} altura={280} />
-            </Painel>
+            </Painel>}
 
             <div className="linha l2b">
               {r.merito && (

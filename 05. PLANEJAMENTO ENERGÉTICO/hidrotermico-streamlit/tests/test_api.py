@@ -21,20 +21,27 @@ def test_catalogo():
 
 def test_semana_igual_ao_modelo():
     escolhas = [{"nome": CANDEIAS}, {"nome": BALIZA}]
-    r = cliente.post("/semana", json={"unidades": escolhas, "hora_impacto": 20})
+    r = cliente.post("/semana", json={"unidades": escolhas, "hora_impacto": 20, "hidro_flat": False})
     assert r.status_code == 200
     d = r.json()
-    direto = despachar_semana(servicos.montar_unidades(escolhas), demanda_semana, True)
+    direto = despachar_semana(servicos.montar_unidades(escolhas), demanda_semana, True, hidro_flat=False)
     assert d["resumo"]["custo_total"] == pytest.approx(direto["total"])
     assert len(d["meia_hora"]["cmo"]) == 336
     assert d["impacto"]["previsto"] == pytest.approx(502.713, abs=0.01)
     assert d["merito"]["tabela"][0]["Fonte"] == CANDEIAS
 
 
+
+def test_semana_hidro_flat_padrao():
+    r = cliente.post("/semana", json={"unidades": [{"nome": CANDEIAS}, {"nome": BALIZA}]}).json()
+    uhe = r["meia_hora"]["UHE"]
+    assert max(uhe) - min(uhe) < 1e-6          # mesma geração hidrelétrica em toda a semana
+
+
 def test_semana_com_ajuste_e_sem_custo_futuro():
-    base = cliente.post("/semana", json={"unidades": [{"nome": CANDEIAS}]}).json()
+    base = cliente.post("/semana", json={"unidades": [{"nome": CANDEIAS}], "hidro_flat": False}).json()
     caro = cliente.post("/semana", json={"unidades": [{"nome": CANDEIAS, "ajustes": {"cvu": 900}}],
-                                         "custo_futuro": False}).json()
+                                         "custo_futuro": False, "hidro_flat": False}).json()
     assert caro["unidades"][CANDEIAS]["cvu"] == 900
     assert caro["resumo"]["custo_futuro"] == 0 and base["resumo"]["custo_futuro"] > 0
 

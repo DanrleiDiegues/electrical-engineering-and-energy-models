@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from './api.js'
-import Painel, { Kpi, Campo, Numero, Chave, TabelaNumeros, SubAbas, fmt, brl } from './componentes/Painel.jsx'
+import Painel, { Kpi, Campo, Numero, Chave, TabelaNumeros, SubAbas, Clima, useGraficos, SeletorGraficos, fmt, brl } from './componentes/Painel.jsx'
 import Grafico from './componentes/Grafico.jsx'
 import { geracaoMensal, armazenamentoMensal, custosMensais } from './opcoes.js'
 import { CALENDARIO, gerarMeses, ajusta, baixar, paraCsv } from './util.js'
@@ -38,7 +38,7 @@ export default function PL() {
     carga: modoCarga === 'Constante' ? p.carga.map(() => cargaConst) : p.carga,
   }), [p, constantes, qb, qs, modoCarga, cargaConst])
 
-  if (!p) return <div className="painel vazio">{erro || 'Carregando…'}</div>
+  if (!p) return <div className="painel vazio">{erro || <Clima grande texto="Carregando o cenário…" />}</div>
   const n = p.carga.length
   const meses = gerarMeses(n, p.inicio)
   const mudarN = novo => setP(q => ({ ...q, afl_b: ajusta(q.afl_b, novo), afl_s: ajusta(q.afl_s, novo), carga: ajusta(q.carga, novo), inicio: novo === 12 ? 0 : q.inicio }))
@@ -136,6 +136,7 @@ export default function PL() {
 }
 
 function Operacao({ r, carregando }) {
+  const g = useGraficos()
   const nomes = [...r.nomes_uhe, ...r.nomes_ute, 'Déficit']
   const dados = nomes.map((_, k) => r.linhas.map(l => (k < r.nomes_uhe.length ? l.uhe[k] : k < nomes.length - 1 ? l.ute[k - r.nomes_uhe.length] : l.deficit)))
   const opG = useMemo(() => geracaoMensal(r.meses, nomes, dados, r.linhas.map(l => l.carga)), [r])   // eslint-disable-line
@@ -143,11 +144,12 @@ function Operacao({ r, carregando }) {
   const opC = useMemo(() => custosMensais(r.meses, [{ nome: 'PL Único', dados: r.linhas.map(l => l.ci / 1e6) }]), [r])
   return (
     <>
-      <Painel titulo="Atendimento à carga" carregando={carregando}><Grafico opcao={opG} altura={360} /></Painel>
-      <div className="linha l2b">
-        <Painel titulo="Armazenamento" tag="% do volume útil"><Grafico opcao={opA} altura={320} /></Painel>
-        <Painel titulo="Custo imediato por mês" tag="R$ milhões"><Grafico opcao={opC} altura={320} /></Painel>
-      </div>
+      <SeletorGraficos g={g} lista={[['carga', 'Atendimento à carga'], ['armaz', 'Armazenamento'], ['custo', 'Custo imediato']]} />
+      {g.mostra('carga') && <Painel titulo="Atendimento à carga" carregando={carregando}><Grafico opcao={opG} altura={360} /></Painel>}
+      {(g.mostra('armaz') || g.mostra('custo')) && <div className="linha l2b">
+        {g.mostra('armaz') && <Painel titulo="Armazenamento" tag="% do volume útil"><Grafico opcao={opA} altura={320} /></Painel>}
+        {g.mostra('custo') && <Painel titulo="Custo imediato por mês" tag="R$ milhões"><Grafico opcao={opC} altura={320} /></Painel>}
+      </div>}
     </>
   )
 }

@@ -62,10 +62,10 @@ def montar_unidades(escolhas):
     return unidades
 
 
-def calcular_semana(escolhas, percentual_carga=100., custo_futuro=True, hora_impacto=None, delta_impacto=1.):
+def calcular_semana(escolhas, percentual_carga=100., custo_futuro=True, hora_impacto=None, delta_impacto=1., hidro_flat=True):
     unidades = montar_unidades(escolhas)
     carga = demanda_semana * percentual_carga / 100
-    r = despachar_semana(unidades, carga, custo_futuro)
+    r = despachar_semana(unidades, carga, custo_futuro, hidro_flat=hidro_flat)
     meia, estados = r["meia"], r["estados"]
     nomes = list(unidades)
     saida = {
@@ -86,7 +86,7 @@ def calcular_semana(escolhas, percentual_carga=100., custo_futuro=True, hora_imp
                            "explicacao": explicacao_merito(tabela, custo_futuro)}
     if hora_impacto is not None and "cmo" in meia:
         previsto = delta_impacto * 0.5 * (meia.cmo[2 * hora_impacto] + meia.cmo[2 * hora_impacto + 1])
-        real = impacto_carga(unidades, carga, custo_futuro, hora_impacto, delta_impacto) - r["total"]
+        real = impacto_carga(unidades, carga, custo_futuro, hora_impacto, delta_impacto, hidro_flat) - r["total"]
         saida["impacto"] = {"hora": hora_impacto, "delta_mw": delta_impacto, "previsto": previsto,
                             "real": real, "diferenca": real - previsto}
     return limpa(saida)

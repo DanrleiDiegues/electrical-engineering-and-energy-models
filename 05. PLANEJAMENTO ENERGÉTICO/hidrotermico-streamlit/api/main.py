@@ -41,7 +41,7 @@ def semana(pedido: PedidoSemana):
     """Compromisso térmico semanal: despacho, CMO, CMA, mérito e (opcional) impacto de carga."""
     return _executa(servicos.calcular_semana,
                     escolhas=[u.model_dump() for u in pedido.unidades], percentual_carga=pedido.percentual_carga,
-                    custo_futuro=pedido.custo_futuro, hora_impacto=pedido.hora_impacto, delta_impacto=pedido.delta_impacto)
+                    custo_futuro=pedido.custo_futuro, hidro_flat=pedido.hidro_flat, hora_impacto=pedido.hora_impacto, delta_impacto=pedido.delta_impacto)
 
 
 @app.get("/arvore/padroes")

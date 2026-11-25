@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, DEMO } from './api.js'
-import Painel, { Kpi, Campo, Numero, fmt, brl } from './componentes/Painel.jsx'
+import Painel, { Kpi, Campo, Numero, Clima, useGraficos, SeletorGraficos, fmt, brl } from './componentes/Painel.jsx'
 import Grafico from './componentes/Grafico.jsx'
 import { arvoreGrafico, volumesFolhas } from './opcoes.js'
 
@@ -10,6 +10,7 @@ export default function Arvore() {
   const [meses, setMeses] = useState(4)
   const [r, setR] = useState(null)
   const [carregando, setCarregando] = useState(false)
+  const g = useGraficos()
   const [erro, setErro] = useState(null)
   const [uheVista, setUheVista] = useState(0)
 
@@ -72,7 +73,7 @@ export default function Arvore() {
 
       <div className="coluna">
         {erro && <div className="aviso">{erro}</div>}
-        {!r && !erro && <div className="painel vazio">Resolvendo a árvore no SCIP…</div>}
+        {!r && !erro && <div className="painel vazio"><Clima grande texto="Resolvendo a árvore no SCIP…" /></div>}
         {r && (
           <>
             <div className="linha l4">
@@ -81,17 +82,18 @@ export default function Arvore() {
               <Kpi rotulo="Trajetórias finais" valor={folhas.length} nota="cada folha é um cenário completo" />
               <Kpi rotulo="Maior probabilidade" valor={fmt(100 * folhas[0].probabilidade, 1)} unidade="%" nota={folhas[0].id} />
             </div>
-            <Painel titulo="Árvore de cenários" tag={`volume final de ${r.uhes[uheVista]} nas folhas`} carregando={carregando}>
+            <SeletorGraficos g={g} lista={[['arvore', 'Árvore de cenários'], ['volumes', 'Volume final por trajetória']]} />
+            {g.mostra('arvore') && <Painel titulo="Árvore de cenários" tag={`volume final de ${r.uhes[uheVista]} nas folhas`} carregando={carregando}>
               <p className="sub">Cada nó é um mês com duas aberturas de afluência. As folhas (laranja) mostram a probabilidade e o volume final da trajetória. Arraste e use o zoom para explorar.</p>
               <div className="dupla" style={{ maxWidth: 360, marginBottom: 6 }}>
                 {r.uhes.map((n, i) => <button key={n} className={`botao ${i === uheVista ? '' : 'fantasma'}`} onClick={() => setUheVista(i)}>{n}</button>)}
               </div>
               <Grafico opcao={grafico.opcao} altura={grafico.altura} />
-            </Painel>
+            </Painel>}
             <div className="linha l2b">
-              <Painel titulo="Volume final por trajetória" tag="hm³">
+              {g.mostra('volumes') && <Painel titulo="Volume final por trajetória" tag="hm³">
                 <Grafico opcao={opVolumes} altura={300} />
-              </Painel>
+              </Painel>}
               <Painel titulo="Folhas mais prováveis">
                 <div className="rolagem"><table>
                   <thead><tr><th>Trajetória</th><th>Prob.</th>{r.uhes.map(n => <th key={n}>{n} (hm³)</th>)}</tr></thead>

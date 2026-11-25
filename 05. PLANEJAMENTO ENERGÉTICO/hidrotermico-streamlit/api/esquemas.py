@@ -23,6 +23,7 @@ class PedidoSemana(BaseModel):
     unidades: list[UnidadeEscolhida] = Field(min_length=1, max_length=4)
     percentual_carga: float = Field(100, gt=0, description="Carga em % do caso-base")
     custo_futuro: bool = Field(True, description="Aplicar a função de custo futuro (cortes)")
+    hidro_flat: bool = Field(True, description="Batalha com vazão turbinada constante em toda a semana")
     hora_impacto: int | None = Field(None, ge=0, le=167, description="Hora para o teste de impacto (opcional)")
     delta_impacto: float = Field(1.0, gt=0, description="Acréscimo de carga (MW) no teste de impacto")
 

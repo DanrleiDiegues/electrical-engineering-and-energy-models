@@ -24,17 +24,20 @@ export const termicasDe = meia => Object.keys(meia).filter(k => !FIXAS.has(k))
 
 export function despacho(meia) {
   const h = meia.hora
-  const area = (nome, y, cor, topo) => ({ name: nome, type: 'line', stack: 'g', showSymbol: false, step: 'end', areaStyle: { opacity: .72 }, lineStyle: { width: 0 }, color: cor, data: par(h, y), z: topo })
+  // Camadas empilhadas "à mão": cada área é desenhada do zero até a soma acumulada, da maior (atrás) para a menor (na frente).
+  // O ECharts empilha errado quando os dois eixos são numéricos (soma também o eixo x), por isso não usamos `stack`.
+  const camadas = [['Hidrelétrica (Batalha)', meia.UHE, COR.agua], ...termicasDe(meia).map((n, i) => [n, meia[n], COR.termicas[i % 4]]), ['Déficit', meia['déficit'], COR.perigo]]
+  let acum = h.map(() => 0)
+  const series = camadas.map(([nome, y, cor], k) => {
+    acum = acum.map((a, i) => a + (y[i] || 0))
+    const dados = h.map((x, i) => [x, acum[i], y[i] || 0])   // [hora, topo da camada, valor da camada]
+    return { name: nome, type: 'line', showSymbol: false, step: 'end', areaStyle: { opacity: 1 }, lineStyle: { width: 0 }, color: cor, data: dados, z: camadas.length - k, encode: { x: 0, y: 1 } }
+  })
   return {
     ...base,
-    tooltip: { ...base.tooltip, formatter: dica(v => v.toFixed(1) + ' MW') },
+    tooltip: { ...base.tooltip, formatter: ps => `${rotuloHora(ps[0].value[0])}<br/>` + ps.map(p => `${p.marker} ${p.seriesName}: <b>${Number(p.value.length > 2 ? p.value[2] : p.value[1]).toFixed(1)} MW</b>`).join('<br/>') },
     xAxis: eixoDias, yAxis: eixoY('MW'),
-    series: [
-      area('Hidrelétrica (Batalha)', meia.UHE, COR.agua, 1),
-      ...termicasDe(meia).map((n, i) => area(n, meia[n], COR.termicas[i % 4], 2)),
-      area('Déficit', meia['déficit'], COR.perigo, 3),
-      { name: 'Carga', type: 'line', showSymbol: false, step: 'end', lineStyle: { color: COR.carga, width: 2 }, color: COR.carga, data: par(h, meia.carga), z: 9 },
-    ],
+    series: [...series, { name: 'Carga', type: 'line', showSymbol: false, step: 'end', lineStyle: { color: COR.carga, width: 2 }, color: COR.carga, data: par(h, meia.carga), z: 20 }],
   }
 }
 

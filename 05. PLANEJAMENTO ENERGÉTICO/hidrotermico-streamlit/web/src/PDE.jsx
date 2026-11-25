@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, DEMO } from './api.js'
-import Painel, { Kpi, Campo, Numero, TabelaNumeros, SubAbas, Progresso, fmt } from './componentes/Painel.jsx'
+import Painel, { Kpi, Campo, Numero, TabelaNumeros, SubAbas, Progresso, Clima, useGraficos, SeletorGraficos, fmt } from './componentes/Painel.jsx'
 import Grafico from './componentes/Grafico.jsx'
 import { geracaoMensal, armazenamentoMensal, custosMensais, custoFuturo } from './opcoes.js'
 import { ajusta, gerarMeses, baixar, paraCsv } from './util.js'
@@ -26,7 +26,7 @@ export default function PDE() {
     api.pdePadroes(12).then(d => { setP({ ...d, nr_disc: DEMO ? d.nr_disc : 12 }); setCargasMensais(Array(d.n_meses).fill(d.carga)); setCustom(Array(d.n_meses).fill(0)) }).catch(e => setErro(e.message))
   }, [])
 
-  if (!p) return <div className="painel vazio">{erro || 'Carregando…'}</div>
+  if (!p) return <div className="painel vazio">{erro || <Clima grande texto="Carregando o cenário…" />}</div>
   const n = p.n_meses
   const meses = gerarMeses(n)
   const aflMax = modoAfl === 'Todos os meses' ? Array(n).fill([u.bMax, u.sMax]) : ajusta(p.afl_max, n)
@@ -129,6 +129,7 @@ export default function PDE() {
 }
 
 function Resultado({ r, aba, setAba, mesFuturo, setMesFuturo }) {
+  const g = useGraficos()
   const s = r.resumo
   const mi = v => fmt(v / 1e6, 2)
   const op = useMemo(() => {
@@ -152,15 +153,16 @@ function Resultado({ r, aba, setAba, mesFuturo, setMesFuturo }) {
       <SubAbas abas={['Operação e armazenamento', 'Custos futuros', 'Dados e exportação', 'Modelo e hipóteses']} valor={aba} onChange={setAba} />
 
       {aba === 'Operação e armazenamento' && (<>
-        <div className="linha l2b">
-          <Painel titulo="Com custo futuro" tag="MW médios"><Grafico opcao={op.gp} altura={360} /></Painel>
-          <Painel titulo="Despachos isolados" tag="MW médios"><Grafico opcao={op.gi} altura={360} /></Painel>
-        </div>
-        <div className="linha l2b">
-          <Painel titulo="Batalha" tag="volume útil %"><Grafico opcao={op.a0} altura={300} /></Painel>
-          <Painel titulo="Serra do Facão" tag="volume útil %"><Grafico opcao={op.a1} altura={300} /></Painel>
-        </div>
-        <Painel titulo="Custo imediato por mês" tag="R$ milhões"><Grafico opcao={op.custos} altura={300} /></Painel>
+        <SeletorGraficos g={g} lista={[['gp', 'Com custo futuro'], ['gi', 'Despachos isolados'], ['a0', 'Batalha'], ['a1', 'Serra do Facão'], ['custos', 'Custo imediato']]} />
+        {(g.mostra('gp') || g.mostra('gi')) && <div className="linha l2b">
+          {g.mostra('gp') && <Painel titulo="Com custo futuro" tag="MW médios"><Grafico opcao={op.gp} altura={360} /></Painel>}
+          {g.mostra('gi') && <Painel titulo="Despachos isolados" tag="MW médios"><Grafico opcao={op.gi} altura={360} /></Painel>}
+        </div>}
+        {(g.mostra('a0') || g.mostra('a1')) && <div className="linha l2b">
+          {g.mostra('a0') && <Painel titulo="Batalha" tag="volume útil %"><Grafico opcao={op.a0} altura={300} /></Painel>}
+          {g.mostra('a1') && <Painel titulo="Serra do Facão" tag="volume útil %"><Grafico opcao={op.a1} altura={300} /></Painel>}
+        </div>}
+        {g.mostra('custos') && <Painel titulo="Custo imediato por mês" tag="R$ milhões"><Grafico opcao={op.custos} altura={300} /></Painel>}
       </>)}
 
       {aba === 'Custos futuros' && (

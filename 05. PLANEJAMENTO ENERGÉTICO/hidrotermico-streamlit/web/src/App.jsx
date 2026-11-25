@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Cenario from './componentes/Cenario.jsx'
+import { Clima } from './componentes/Painel.jsx'
 import Semana from './Semana.jsx'
 import Arvore from './Arvore.jsx'
 import PDE from './PDE.jsx'
 import PL from './PL.jsx'
 import { api, DEMO } from './api.js'
+import logoUfjf from './assets/logo_ufjf.png'
 
 const Icone = ({ d }) => <svg viewBox="0 0 24 24"><path d={d} /></svg>
 const ICONES = {
@@ -19,7 +21,21 @@ export default function App() {
   const [aba, setAba] = useState(() => (NOMES[location.hash.slice(1)] ? location.hash.slice(1) : 'semana'))
   const [online, setOnline] = useState(DEMO)
   useEffect(() => { DEMO || api.catalogo().then(() => setOnline(true)).catch(() => setOnline(false)) }, [])
-  const ir = a => { setAba(a); location.hash = a }
+  const [exibida, setExibida] = useState(aba)          // aba realmente na tela (muda só depois da saída suave)
+  const [saindo, setSaindo] = useState(false)
+  const [abertura, setAbertura] = useState(true)       // tela de abertura com o sol e a chuva
+  const [fechando, setFechando] = useState(false)
+  const tempo = useRef(null)
+  useEffect(() => {
+    const a = setTimeout(() => setFechando(true), 1400), b = setTimeout(() => setAbertura(false), 1900)
+    return () => { clearTimeout(a); clearTimeout(b); clearTimeout(tempo.current) }
+  }, [])
+  const ir = a => {
+    if (a === aba) return
+    setAba(a); location.hash = a; setSaindo(true)
+    clearTimeout(tempo.current)
+    tempo.current = setTimeout(() => { setExibida(a); setSaindo(false) }, 180)
+  }
   return (
     <>
       <Cenario />
@@ -34,12 +50,16 @@ export default function App() {
           </div>
           <div className="abas">{Object.entries(NOMES).map(([k, n]) => <button key={k} className={aba === k ? 'ativa' : ''} onClick={() => ir(k)}>{n}</button>)}</div>
           <div className="pilula"><span className={`ponto ${online ? '' : 'off'}`} />{DEMO ? 'Dados de demonstração' : online ? 'API conectada' : 'API offline'}</div>
+          <img className="logo-ufjf" src={logoUfjf} alt="UFJF" title="Universidade Federal de Juiz de Fora" />
         </header>
-        {aba === 'pde' && <PDE />}
-        {aba === 'pl' && <PL />}
-        {aba === 'semana' && <Semana />}
-        {aba === 'arvore' && <Arvore />}
+        <div key={exibida} className={`pagina ${saindo ? 'saindo' : 'entrando'}`}>
+          {exibida === 'pde' && <PDE />}
+          {exibida === 'pl' && <PL />}
+          {exibida === 'semana' && <Semana />}
+          {exibida === 'arvore' && <Arvore />}
+        </div>
       </main>
+      {abertura && <div className={`abertura ${fechando ? 'fim' : ''}`}><Clima grande texto="Carregando o cenário…" /></div>}
     </>
   )
 }
